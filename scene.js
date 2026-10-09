@@ -110,16 +110,22 @@ function shaft(part, from, to, y, on, angle) {
   addMark(put(cylinder(0.16, to - from), 'steel', part, on, y, (from + to) / 2, angle), 0.16, to - from);
 }
 
-// ギヤの組（下 = カウンタ軸の固定ギヤ、上 = アウトプット軸の空転ギヤ）
-function addGearPair(g, i, on, counterAngle) {
+// ギヤの組（下 = カウンタ軸、上 = アウトプット軸）
+// スリーブのある軸のギヤが空転ギヤ（白）で、反対の軸のギヤが固定ギヤになる
+function addGearPair(g, i, on, counterAngle, outputAngle) {
   const part = 'gear:' + i;
   const z = gearZ(i);
   const scale = g.reverse ? 0.78 : 1;     // リバースは2枚を離して、間にアイドラを入れる
   const lower = scale * A * g.counter / (g.counter + g.out);
   const upper = scale * A - lower;
-  put(gearGeometry(g.counter, lower, 0.5), 'steel', part, on, -A, z, counterAngle);
+  const below = { teeth: g.counter, radius: lower, y: -A, angle: counterAngle };
+  const above = { teeth: g.out, radius: upper, y: 0, angle: outputAngle };
+  // fixed = 軸と一体で回る固定ギヤ、free = 固定ギヤに回される空転ギヤ
+  const freeBelow = sideOf(Math.floor(i / 2)) === 'counter';
+  const fixed = freeBelow ? above : below;
+  const free = freeBelow ? below : above;
+  free.angle = () => meshAngle(fixed.angle(), fixed.teeth, free.teeth, Math.atan2(free.y - fixed.y, 0));
 
-  let upperAngle = () => meshAngle(counterAngle(), g.counter, g.out, Math.PI / 2);
   if (g.reverse) {
     // アイドラ: 2枚の両方とかみ合う位置を、2つの円の交点から求める
     const count = 15;
@@ -128,32 +134,42 @@ function addGearPair(g, i, on, counterAngle) {
     const d2 = upper + radius;
     const y = (d1 * d1 - d2 * d2 - A * A) / (2 * A);
     const x = -Math.sqrt(d2 * d2 - y * y);
-    const idlerAngle = () => meshAngle(counterAngle(), g.counter, count, Math.atan2(y + A, x));
+    const idlerAngle = () => meshAngle(fixed.angle(), fixed.teeth, count, Math.atan2(y - fixed.y, x));
     put(gearGeometry(count, radius, 0.5), 'steel', 'idler', on, y, z, idlerAngle).position.x = x;
-    upperAngle = () => meshAngle(idlerAngle(), count, g.out, Math.atan2(-y, -x));
+    free.angle = () => meshAngle(idlerAngle(), count, free.teeth, Math.atan2(free.y - y, -x));
   }
-  put(gearGeometry(g.out, upper, 0.5), 'free', part, on, 0, z, upperAngle);
+  put(gearGeometry(fixed.teeth, fixed.radius, 0.5), 'steel', part, on, fixed.y, z, fixed.angle);
+  put(gearGeometry(free.teeth, free.radius, 0.5), 'free', part, on, free.y, z, free.angle);
 
   if (state.step < STEP_SLEEVE) return;
   const side = i % 2 === 0 ? 1 : -1;      // スリーブのある側
-  put(gearGeometry(14, 0.5, 0.3), 'free', part, on, 0, z + side * 0.4, upperAngle);   // ドグ歯
-  if (state.step >= STEP_SYNCHRO) put(cylinder(0.56, 0.12), 'brass', 'synchro', false, 0, z + side * 0.62);
+  put(gearGeometry(14, 0.5, 0.3), 'free', part, on, free.y, z + side * 0.4, free.angle);   // ドグ歯
+  if (state.step >= STEP_SYNCHRO) put(cylinder(0.56, 0.12), 'brass', 'synchro', false, free.y, z + side * 0.62);
 }
 
 // ハブ、スリーブ、シフトフォーク。スリーブとフォークは一緒に左右へ動く
-function addSleeve(k, flow, outputAngle) {
+function addSleeve(k, flow, counterAngle, outputAngle) {
   const on = flow && sleevePos(k) !== 0;
+  const below = sideOf(k) === 'counter';
+  const y = below ? -A : 0;
   const group = new THREE.Group();
   box.add(group);
   sliders.push({ group, k, home: sleeveZ(k) });
-  put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, 0, sleeveZ(k));
-  put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, 0, 0, outputAngle, group);
-  // フォーク。ドラム式では、ドラムの手前まで伸ばして、溝へはまる赤いピンを付ける。H型では、シフトロッドにつなぐ
+  put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, y, sleeveZ(k));
+  put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, y, 0, below ? counterAngle : outputAngle, group);
+
+  // フォーク。カウンタ軸側のスリーブへは、アウトプット軸をよけて手前を通し、スリーブの横をつかむ
   const shift = shiftType();
+  const forkX = below ? -0.45 : 0;
+  const bottom = below ? -A : 0.65;
   const top = { none: 2.15, drum: DRUM_Y + 0.2, lever: RAIL_Y }[shift];
-  put(new THREE.BoxGeometry(0.2, top - 0.65, 0.16), 'dark', 'fork:' + k, false, (top + 0.65) / 2, 0, null, group);
-  if (shift === 'drum') put(new THREE.CylinderGeometry(0.09, 0.09, 0.45).rotateZ(Math.PI / 2), 'key', 'fork:' + k, false, DRUM_Y, 0, null, group);
-  if (shift === 'lever') addRail(group, k);   // シフトロッドとゲート（hshift.js）
+  put(new THREE.BoxGeometry(0.2, top - bottom, 0.16), 'dark', 'fork:' + k, false, (top + bottom) / 2, 0, null, group).position.x = forkX;
+  // ドラム式では、溝へはまる赤いピンを付ける。H型では、シフトロッドにつなぐ
+  if (shift === 'drum') {
+    const pin = new THREE.CylinderGeometry(0.09, 0.09, 0.45 - forkX).rotateZ(Math.PI / 2);
+    put(pin, 'key', 'fork:' + k, false, DRUM_Y, 0, null, group).position.x = forkX / 2;
+  }
+  if (shift === 'lever') addRail(group, k, forkX);   // シフトロッドとゲート（hshift.js）
 }
 
 // フライホイール、クラッチディスク、プレッシャープレート
@@ -196,9 +212,9 @@ function buildScene() {
   shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow, counterAngle);
 
   if (state.step >= STEP_OUTPUT) shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
-  list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle));
+  list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle, outputAngle));
   if (state.step >= STEP_SLEEVE) {
-    for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, outputAngle);
+    for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, counterAngle, outputAngle);
     if (shiftType() !== 'lever') put(cylinder(0.07, endZ - 0.5), 'dark', 'fork:0', false, 2.15, (endZ - 1.5) / 2);   // フォークが滑る棒
   }
   if (shiftType() === 'drum') buildDrum();     // シフトドラム（drum.js）

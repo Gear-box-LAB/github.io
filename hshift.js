@@ -23,14 +23,14 @@ function resetLever() {
   leverNow.s = 0;
 }
 
-// k番のフォークに、シフトロッドとゲートを付ける。group = スリーブと一緒に動くまとまり
-function addRail(group, k) {
+// k番のフォークに、シフトロッドとゲートを付ける。group = スリーブと一緒に動くまとまり、forkX = フォークの左右の位置
+function addRail(group, k, forkX) {
   const x = railX(k);
   const gateZ = leverZ() - sleeveZ(k);          // フォークから見た、ゲートの場所
   const from = Math.min(0, gateZ) - 0.7;
   const to = Math.max(0, gateZ) + 0.7;
   // フォークの上端からロッドまでの横のつなぎ
-  put(new THREE.BoxGeometry(Math.abs(x) + 0.2, 0.16, 0.16), 'dark', 'fork:' + k, false, RAIL_Y, 0, null, group).position.x = x / 2;
+  put(new THREE.BoxGeometry(Math.abs(x - forkX) + 0.2, 0.16, 0.16), 'dark', 'fork:' + k, false, RAIL_Y, 0, null, group).position.x = (x + forkX) / 2;
   put(cylinder(0.08, to - from), 'steel', 'rail', false, RAIL_Y, (from + to) / 2, null, group).position.x = x;
   // ゲート: 前後2個の受けの間に、レバーが入る
   [-0.22, 0.22].forEach(offset => {

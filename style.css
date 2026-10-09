@@ -60,8 +60,8 @@ input[type="number"] { width: 100%; min-width: 60px; }
   border-bottom: 1px solid var(--line);
   min-width: 0;
 }
-#types button { font-size: 13px; }
-.steps { flex-basis: 100%; display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-block: 2px; }
+.steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-block: 2px; min-width: 0; }
+.steps .type { border-radius: 999px; padding-inline: 12px; }   /* 方式を選ぶボタンは、丸い形で段階のボタンと見分ける */
 .steps button { font-size: 13px; padding: 4px 6px; }
 .group { font-size: 12px; color: var(--sub); white-space: nowrap; margin-left: 6px; }
 
@@ -134,10 +134,12 @@ th, td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: rig
 th { color: var(--sub); font-weight: 400; white-space: normal; }
 th:first-child, td:first-child { text-align: left; }
 td input[type="number"] { width: 64px; }
+select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
 
 /* せまい画面: 図を上、説明を下に重ねる */
 @media (max-width: 800px) {
   body { height: auto; }
+  .steps { flex-wrap: nowrap; overflow-x: auto; }
   .bench { grid-template-columns: 1fr; }
   .stage { height: 60vh; }
   .panel { border-left: 0; }

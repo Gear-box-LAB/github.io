@@ -214,13 +214,25 @@ const LESSONS = [
     title: '歯数を変えて、自分のギヤボックスを組む',
     structure: () => [
       '歯数を変えると、図の歯車の大きさと、数式タブの値が変わります。ギヤは8組まで足せます。',
+      'スリーブを置く軸は、スリーブごとに選べます。カウンタ軸側を選ぶと、空転ギヤ（白）、ハブ、シンクロがカウンタ軸に移り、アウトプット軸側のギヤが固定ギヤになります。フォークは、アウトプット軸をよけて下まで伸びます。',
+      '置く軸を変えても、変速比は変わりません。変わるのは、ニュートラルで空転ギヤを回す相手です。アウトプット軸側ならエンジン側に、カウンタ軸側ならタイヤ側に回されます。そのため、シンクロが合わせる回転差が変わります（数式タブの下の表）。',
+      '実物の例: サーブ 9-5 の5速MT（横置きの2軸式）は、1速と2速のスリーブがアウトプット軸に、3速から5速のスリーブがインプット軸にあります（出典: <a href="https://saabwisonline.com/9-5-9600/1998/4-transmission/manual-gearbox/technical-description/basic-design" target="_blank" rel="noopener">Saab WIS</a>）。マツダ ロードスター（ND）の6速MTは、全部をアウトプット軸側に置いています。',
       state.type === 'drum'
         ? '「リバース」に印を付けた段は、ドラムの並びで N の手前に入ります（R → N → 前進の段）。'
         : 'H型のパターンは、表の上から2段ずつが1本のロッド（1つの列）になります。'
     ],
-    symbols: 'a: 軸間距離、m: モジュール（歯の大きさ）。どの組も同じ2本の軸に並ぶので、軸間距離は同じです。モジュールが同じなら、歯数の和も同じになります。実際のギヤボックスは、組ごとにモジュールやねじれ角を変えて、軸間距離を合わせています。',
-    formula: () => [['軸間距離', `a = m × (${Z_C} + ${Z_OUT}) / 2`, '歯数の和は下の表']],
-    extra: allGearsTable
+    symbols: 'a: 軸間距離、m: モジュール（歯の大きさ）、i: その段のギヤ比。どの組も同じ2本の軸に並ぶので、軸間距離は同じです。モジュールが同じなら、歯数の和も同じになります。実際のギヤボックスは、組ごとにモジュールやねじれ角を変えて、軸間距離を合わせています。',
+    formula: () => [
+      ['軸間距離', `a = m × (${Z_C} + ${Z_OUT}) / 2`, '歯数の和は下の表'],
+      ['空転ギヤの回転数（アウトプット軸側に置いたとき）', `${N_G} = ${N_C} / i`, 'カウンタ軸の固定ギヤに回される'],
+      ['空転ギヤの回転数（カウンタ軸側に置いたとき）', `${N_G} = ${N_OUT} × i`, 'アウトプット軸の固定ギヤに回される'],
+      ['回転差', `Δn = ${N_G} − 空転ギヤが乗っている軸の回転数`, '2つ目の表（今の状態での値）']
+    ],
+    extra: c => allGearsTable() + table(['入れる段', '空転ギヤのある軸', '空転ギヤ (rpm)', '軸 (rpm)', '回転差 (rpm)', '合わせる時間 (秒)'],
+      state.gears.map((g, i) => {
+        const f = freeGear(i, c);
+        return [safe(g.name), f.shaft, n0(f.rpm), n0(f.shaftRpm), n0(f.rpm - f.shaftRpm), n2(synchro(i, c).time)];
+      }))
   },
   {
     title: 'クラッチは、摩擦で力をつなぎ、切る',
@@ -305,14 +317,18 @@ function partInfo(part) {
   };
   if (kind === 'gear') {
     const g = state.gears[i];
-    const diff = freeRpm(i, c) - c.outRpm;
+    const f = freeGear(i, c);
+    const below = f.shaft === 'カウンタ軸';
     return {
       title: safe(g.name) + ' のギヤの組',
-      text: '下のカウンタ軸側は固定ギヤで、軸と一体で回ります。上のアウトプット軸側は空転ギヤ（白）で、軸の上で空回りします。スリーブがつながったときだけ、力が伝わります。',
+      text: (below
+        ? '上のアウトプット軸側は固定ギヤで、軸と一体で回ります。下のカウンタ軸側は空転ギヤ（白）で、軸の上で空回りします。'
+        : '下のカウンタ軸側は固定ギヤで、軸と一体で回ります。上のアウトプット軸側は空転ギヤ（白）で、軸の上で空回りします。')
+        + 'スリーブがつながったときだけ、力が伝わります。',
       rows: [
         ['ギヤ比', `i = ${Z_OUT} / ${Z_C}`, `${g.out} ÷ ${g.counter} = ${n2(Math.abs(gearRatio(g)))}`],
-        ['空転ギヤの回転数', `${N_G} = ${N_C} / i`, `${n0(freeRpm(i, c))} rpm`],
-        ['軸との回転差', `Δn = ${N_G} − ${N_OUT}`, `${n0(diff)} rpm${i === state.gear ? '（つながっているので0）' : ''}`]
+        ['空転ギヤの回転数', below ? `${N_G} = ${N_OUT} × i` : `${N_G} = ${N_C} / i`, `${n0(f.rpm)} rpm`],
+        ['軸との回転差', `Δn = ${N_G} − ${below ? N_C : N_OUT}`, `${n0(f.rpm - f.shaftRpm)} rpm${i === state.gear ? '（つながっているので0）' : ''}`]
       ]
     };
   }
@@ -323,8 +339,8 @@ function partInfo(part) {
   };
   if (kind === 'sleeve') return {
     title: 'ハブとスリーブ',
-    text: 'ハブはアウトプット軸に固定されています。スリーブはハブの外側で、軸と一緒に回りながら左右に滑ります。となりの空転ギヤのドグ歯にかみ合うと、そのギヤと軸が一体になります。',
-    rows: [['回転数', `スリーブ = ${N_OUT}`, `${n0(c.outRpm)} rpm`]]
+    text: `ハブは${sideOf(i) === 'counter' ? 'カウンタ軸' : 'アウトプット軸'}に固定されています。スリーブはハブの外側で、軸と一緒に回りながら左右に滑ります。となりの空転ギヤのドグ歯にかみ合うと、そのギヤと軸が一体になります。`,
+    rows: [['回転数', `スリーブ = ${sideOf(i) === 'counter' ? N_C : N_OUT}`, `${n0(sideOf(i) === 'counter' ? c.counterRpm : c.outRpm)} rpm`]]
   };
   if (part === 'drum') return {
     title: 'シフトドラム',
@@ -399,11 +415,13 @@ function partInfo(part) {
 
 // ---------- 画面を作る ----------
 function renderSteps() {
+  // 段階5までは共通。段階6の手前に、方式を選ぶボタンを置く
+  const typeButtons = TYPES.map(t =>
+    `<button type="button" data-type="${t.id}" title="${t.detail}" class="type ${t.id === state.type ? 'current' : ''}">${t.name}</button>`).join('');
   el('steps').innerHTML = STEPS.map((s, i) =>
     (s.group ? `<span class="group">${s.group}</span>` : '') +
+    (i + 1 === STEP_DRUM ? typeButtons : '') +
     `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1} ${stepName(s)}</button>`).join('');
-  el('types').innerHTML = TYPES.map(t =>
-    `<button type="button" data-type="${t.id}" class="${t.id === state.type ? 'current' : ''}">${t.name}</button>`).join('');
 }
 
 function renderGearButtons() {
@@ -453,7 +471,15 @@ function renderInputs() {
       `<input type="number" data-i="${i}" data-key="counter" value="${g.counter}" aria-label="カウンタ軸側の歯数">`,
       `<input type="checkbox" data-i="${i}" data-key="reverse" ${g.reverse ? 'checked' : ''} aria-label="リバースにする">`,
       `<button type="button" data-del="${i}">削除</button>`
-    ])) + '<div class="buttons"><button type="button" id="addGear">ギヤを追加</button></div>';
+    ])) + '<div class="buttons"><button type="button" id="addGear">ギヤを追加</button></div>'
+      + table(['スリーブ', '受け持つ段', '置く軸'], [...Array(Math.ceil(state.gears.length / 2)).keys()].map(k => [
+        `スリーブ${k + 1}`,
+        state.gears.slice(k * 2, k * 2 + 2).map(g => safe(g.name)).join('、'),
+        `<select data-sleeve="${k}" aria-label="スリーブ${k + 1}を置く軸">
+          <option value="out" ${state.sleeveSide[k] === 'out' ? 'selected' : ''}>アウトプット軸</option>
+          <option value="counter" ${state.sleeveSide[k] === 'counter' ? 'selected' : ''}>カウンタ軸</option>
+        </select>`
+      ]));
   }
   el('lessonInputs').innerHTML = html;
 }
@@ -515,12 +541,12 @@ function pick(part, x, y) {
   el('bubble').style.top = Math.max(8, Math.min(y + 12, stage.clientHeight - el('bubble').offsetHeight - 8)) + 'px';
 }
 
-el('types').addEventListener('click', e => {
-  if (!e.target.dataset.type) return;
-  state.type = e.target.dataset.type;
-  showStep(state.step);
-});
 el('steps').addEventListener('click', e => {
+  // 方式を選ぶと、方式で内容が変わる最初の段階（段階6）以降を見せる
+  if (e.target.dataset.type) {
+    state.type = e.target.dataset.type;
+    showStep(Math.max(state.step, STEP_DRUM));
+  }
   if (e.target.dataset.step) showStep(Number(e.target.dataset.step));
 });
 el('prev').addEventListener('click', () => showStep(state.step - 1));
@@ -565,6 +591,7 @@ el('torque').addEventListener('input', e => { state.torque = positive(e.target.v
 // 説明パネルの入力欄（数値の欄と、段階7のギヤの表）
 el('lessonInputs').addEventListener('input', e => {
   const d = e.target.dataset;
+  if (d.sleeve) state.sleeveSide[Number(d.sleeve)] = e.target.value;
   if (d.obj) state[d.obj][d.key] = d.obj === 'red' ? teeth(e.target.value) : positive(e.target.value);
   if (d.i) {
     const g = state.gears[Number(d.i)];

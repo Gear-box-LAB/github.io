@@ -3,10 +3,10 @@
 const NEUTRAL = -1;
 const MAX_GEARS = 8;
 
-// ギヤボックスの方式。ギヤ、スリーブ、シンクロは同じで、フォークの動かし方が違う
+// ギヤボックスの方式。段階5までは共通で、段階6からの「フォークの動かし方」が違う
 const TYPES = [
-  { id: 'drum', name: 'シーケンシャル式（シンクロ＋シフトドラム）' },
-  { id: 'lever', name: 'H型シフト式（乗用車のMT）' }
+  { id: 'drum', name: 'シーケンシャル式', detail: 'シンクロ＋シフトドラム' },
+  { id: 'lever', name: 'H型シフト式', detail: '乗用車のMT' }
 ];
 
 // 学ぶ順番。gears = その段階で図に出すギヤの組の数
@@ -16,7 +16,7 @@ const STEPS = [
   { name: 'スリーブ', gears: 1 },
   { name: '2速を足す', gears: 2 },
   { name: 'シンクロ', gears: 2 },
-  { name: { drum: 'シフトドラム', lever: 'H型シフト' }, gears: 4 },   // 方式で名前が変わる
+  { group: '方式を選ぶ', name: { drum: 'シフトドラム', lever: 'H型シフト' }, gears: 4 },   // 方式で名前が変わる
   { name: '6速とリバース', gears: MAX_GEARS },
   { group: '組んでみる', name: '設計する', gears: MAX_GEARS },
   { group: '周辺を知る', name: 'クラッチ', gears: MAX_GEARS },
@@ -32,6 +32,7 @@ const state = {
   gear: NEUTRAL,        // 今つながっているギヤの番号
   picked: null,         // 図でクリックした部品
   clutchOn: true,
+  sleeveSide: ['out', 'out', 'out', 'out'],   // スリーブごとの、置く軸（'out' = アウトプット軸、'counter' = カウンタ軸）
   detail: false,        // 段階5で、シンクロの拡大図を見ているか
   phase: 0,             // 拡大図での、スリーブを押し込む段階（0〜3）
   explode: false,       // 拡大図の部品を、軸方向にばらして見せる
@@ -120,14 +121,23 @@ function calc(index) {
   return c;
 }
 
-// i番の空転ギヤの回転数（つながっていなくても、カウンタ軸に回されている）
-const freeRpm = (i, c) => c.counterRpm / gearRatio(state.gears[i]);
+// k番のスリーブと空転ギヤを置く軸。選べるのは「設計する」の段階から
+const sideOf = k => state.step >= STEP_DESIGN ? state.sleeveSide[k] : 'out';
+
+// i番の空転ギヤの回転数（rpm）と、その空転ギヤが乗っている軸の回転数（shaftRpm）
+// アウトプット軸側にあればカウンタ軸に回され、カウンタ軸側にあればアウトプット軸に回される
+function freeGear(i, c) {
+  const ratio = gearRatio(state.gears[i]);
+  if (sideOf(Math.floor(i / 2)) === 'counter') return { rpm: c.outRpm * ratio, shaftRpm: c.counterRpm, shaft: 'カウンタ軸' };
+  return { rpm: c.counterRpm / ratio, shaftRpm: c.outRpm, shaft: 'アウトプット軸' };
+}
+const freeRpm = (i, c) => freeGear(i, c).rpm;
 
 // シンクロ: コーンの摩擦トルクと、i番のギヤの回転を合わせるのにかかる時間
 function synchro(i, c) {
   const s = state.synchro;
   const torque = s.mu * s.force * s.radius / Math.sin(s.angle * Math.PI / 180);
-  const diff = freeRpm(i, c) - c.outRpm;
+  const diff = freeGear(i, c).rpm - freeGear(i, c).shaftRpm;
   const time = s.inertia * 2 * Math.PI * Math.abs(diff) / 60 / torque;
   const index = s.force * s.pitch / Math.tan(s.chamfer * Math.PI / 180);   // 歯先の斜面がリングを回そうとするトルク
   return { torque, diff, time, index };
