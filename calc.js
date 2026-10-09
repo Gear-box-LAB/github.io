@@ -58,6 +58,14 @@ const teeth = value => Math.min(80, Math.max(8, Math.round(Number(value) || 8)))
 const positive = value => Math.max(0.001, Number(value) || 0.001);
 
 const shownGears = () => state.gears.slice(0, STEPS[state.step - 1].gears);
+
+// シフトドラムの並び順（ギヤの番号の列）。リバース → N → 前進の段の順
+function drumOrder() {
+  const numbers = shownGears().map((g, i) => i);
+  const reverse = numbers.filter(i => state.gears[i].reverse);
+  const forward = numbers.filter(i => !state.gears[i].reverse);
+  return reverse.concat([NEUTRAL], forward);
+}
 const sleeveCount = () => Math.ceil(shownGears().length / 2);
 
 // スリーブの位置: -1 = 左のギヤへ、0 = 中立、1 = 右のギヤへ

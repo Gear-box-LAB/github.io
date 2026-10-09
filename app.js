@@ -15,6 +15,8 @@ const N_IN = sub('n', 'in'), N_C = sub('n', 'c'), N_G = sub('n', 'g'), N_OUT = s
 const T_IN = sub('T', 'in'), T_OUT = sub('T', 'out'), T_S = sub('T', 's'), T_C = sub('T', 'c');
 const I_RED = sub('i', 'red'), Z_C = sub('z', 'c'), Z_OUT = sub('z', 'out');
 
+const gearName = gear => gear === NEUTRAL ? 'N' : safe(state.gears[gear].name);
+
 // 説明で例に使う段（ニュートラルのときは1速）
 const exampleGear = () => state.gear === NEUTRAL ? 0 : state.gear;
 
@@ -150,10 +152,11 @@ const LESSONS = [
     inputs: [['ドラムの半径 r (m)', 'drum', 'radius'], ['フォークが動く量 x (m)', 'drum', 'stroke'], ['溝が曲がっている角度 φ (°)', 'drum', 'ramp'], ['ドラムを回すトルク (N·m)', 'drum', 'torque']],
     formula: () => {
       const d = state.drum, cam = drumCam();
-      const positions = shownGears().length + 1;
+      const positions = drumOrder().length;
+      const now = drumOrder().indexOf(state.gear);
       return [
         ['1段ぶんの角度', 'θ = 360° / 位置の数', `360 ÷ ${positions} = ${n1(360 / positions)}°`],
-        ['今のドラムの角度', '位置の番号 × θ', `${state.gear + 1} × ${n1(360 / positions)} = ${n1((state.gear + 1) * 360 / positions)}°`],
+        ['今のドラムの角度', '位置の番号 × θ', `${now} × ${n1(360 / positions)} = ${n1(now * 360 / positions)}°（番号は、下の表の上から0、1、2…）`],
         ['溝の傾き', 'tan γ = x / (r × φ)', `${d.stroke} ÷ (${d.radius} × ${d.ramp}° をラジアンにした値) = ${n2(cam.slope)}（γ = ${n1(cam.angle)}°）`],
         ['フォークを押す力', `F = ${sub('T', 'd')} / (r × tan γ)`, `${d.torque} ÷ (${d.radius} × ${n2(cam.slope)}) = ${n0(cam.force)} N`]
       ];
@@ -162,7 +165,7 @@ const LESSONS = [
       const names = { '-1': '左', '0': '中立', '1': '右' };
       const forks = [...Array(sleeveCount()).keys()];
       return table(['ドラムの位置'].concat(forks.map(k => `フォーク${k + 1}`)),
-        ['N'].concat(shownGears().map(g => safe(g.name))).map((name, j) => [name].concat(forks.map(k => names[forkAt(k, j)]))));
+        drumOrder().map((gear, j) => [gearName(gear)].concat(forks.map(k => names[forkAt(k, j)]))));
     }
   },
   {
@@ -170,6 +173,7 @@ const LESSONS = [
     structure: () => [
       'ギヤの組が6つ、スリーブが3個に増えました。どの段でも、力の通り道は「インプット軸 → カウンタ軸 → 選んだギヤ → アウトプット軸」です。',
       'リバースは、2枚のギヤの間にアイドラギヤを1枚はさみます。歯車は1回かみ合うごとに向きが逆になるので、3枚だとアウトプット軸が逆に回ります。',
+      'ドラムの並びは「R → N → 1速 → 2速 …」です。R は N の手前にあるので、前進の段を上げ下げしている間に R を通ることはありません。',
       '高い段ほど変速比は小さくなり、回転は速く、トルクは小さくなります。変速比が1より小さい段をオーバードライブと呼びます。',
       '実際の縦置き用ギヤボックスには、インプット軸とアウトプット軸を直接つなぐ「直結」の段（変速比1）を持つものが多くあります。このサイトではまだ扱っていません。'
     ],
@@ -180,7 +184,8 @@ const LESSONS = [
   {
     title: '歯数を変えて、自分のギヤボックスを組む',
     structure: () => [
-      '歯数を変えると、図の歯車の大きさと、数式タブの値が変わります。ギヤは8組まで足せます。'
+      '歯数を変えると、図の歯車の大きさと、数式タブの値が変わります。ギヤは8組まで足せます。',
+      '「リバース」に印を付けた段は、ドラムの並びで N の手前に入ります（R → N → 前進の段）。'
     ],
     symbols: 'a: 軸間距離、m: モジュール（歯の大きさ）。どの組も同じ2本の軸に並ぶので、軸間距離は同じです。モジュールが同じなら、歯数の和も同じになります。実際のギヤボックスは、組ごとにモジュールやねじれ角を変えて、軸間距離を合わせています。',
     formula: () => [['軸間距離', `a = m × (${Z_C} + ${Z_OUT}) / 2`, '歯数の和は下の表']],
@@ -294,7 +299,7 @@ function partInfo(part) {
     title: 'シフトドラム',
     text: '表面に溝が彫られた筒です。回すと、溝にはまったフォークのピンが左右に動き、どのスリーブをどちらへ動かすかが決まります。',
     rows: [
-      ['1段ぶんの角度', 'θ = 360° / 位置の数', `${n1(360 / (shownGears().length + 1))}°`],
+      ['1段ぶんの角度', 'θ = 360° / 位置の数', `${n1(360 / drumOrder().length)}°`],
       ['フォークを押す力', `F = ${sub('T', 'd')} / (r × tan γ)`, `${n0(drumCam().force)} N`]
     ]
   };
@@ -351,9 +356,10 @@ function renderSteps() {
 }
 
 function renderGearButtons() {
-  const names = state.step >= STEP_SLEEVE && !state.detail ? ['N'].concat(shownGears().map(g => safe(g.name))) : [];
-  el('gearButtons').innerHTML = names.map((name, i) =>
-    `<button type="button" data-gear="${i - 1}" class="${i - 1 === state.gear ? 'current' : ''}">${name}</button>`).join('');
+  // ドラムの並び順（リバース → N → 前進の段）でボタンを並べる
+  const order = state.step >= STEP_SLEEVE && !state.detail ? drumOrder() : [];
+  el('gearButtons').innerHTML = order.map(gear =>
+    `<button type="button" data-gear="${gear}" class="${gear === state.gear ? 'current' : ''}">${gearName(gear)}</button>`).join('');
   el('clutchButton').hidden = state.step < STEP_CLUTCH;
   el('clutchButton').textContent = state.clutchOn ? 'クラッチを切る' : 'クラッチをつなぐ';
   el('engineInputs').hidden = state.detail;
@@ -428,6 +434,7 @@ function showStep(step) {
   state.picked = null;
   state.clutchOn = true;
   state.detail = false;
+  resetDrum();
   renderInputs();
   update();
   frameCamera();
@@ -491,7 +498,11 @@ el('lessonInputs').addEventListener('input', e => {
   if (d.i) {
     const g = state.gears[Number(d.i)];
     if (d.key === 'name') g.name = e.target.value;
-    if (d.key === 'reverse') g.reverse = e.target.checked;
+    if (d.key === 'reverse') {
+      g.reverse = e.target.checked;
+      state.gear = NEUTRAL;
+      resetDrum();
+    }
     if (d.key === 'out' || d.key === 'counter') g[d.key] = teeth(e.target.value);
   }
   update();
@@ -505,6 +516,7 @@ el('lessonInputs').addEventListener('click', e => {
     return;
   }
   state.gear = NEUTRAL;
+  resetDrum();
   renderInputs();
   update();
 });
