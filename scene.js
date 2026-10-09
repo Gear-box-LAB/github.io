@@ -9,7 +9,7 @@ const SLIDE = 0.35;     // スリーブが動く量
 const SLOW = 1 / 40;    // 目で追えるように、回転を1/40の速さで見せる
 const COLOR = {
   stage: 0x17303a, steel: 0x9fb0b8, free: 0xeef2f3, power: 0xf0a81c, dark: 0x4a606b,
-  brass: 0xc9a24a, key: 0xd9534f, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff
+  brass: 0xc9a24a, key: 0xd9534f, groove: 0x14232b, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff
 };
 
 const canvas = el('stage');
@@ -93,8 +93,16 @@ function put(geometry, kind, part, on, y, z, angle, parent) {
   return mesh;
 }
 
-function shaft(part, from, to, y, on) {
-  put(cylinder(0.16, to - from), 'steel', part, on, y, (from + to) / 2);
+// 回っているのが見えるように、円柱の0°の位置に赤い線を1本引く
+function addMark(mesh, radius, length) {
+  const line = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, length), new THREE.MeshBasicMaterial({ color: 0xd40000 }));
+  line.position.y = radius;
+  line.userData.part = mesh.userData.part;
+  mesh.add(line);
+}
+
+function shaft(part, from, to, y, on, angle) {
+  addMark(put(cylinder(0.16, to - from), 'steel', part, on, y, (from + to) / 2, angle), 0.16, to - from);
 }
 
 // ギヤの組（下 = カウンタ軸の固定ギヤ、上 = アウトプット軸の空転ギヤ）
@@ -135,7 +143,10 @@ function addSleeve(k, flow, outputAngle) {
   sliders.push({ group, k, home: sleeveZ(k) });
   put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, 0, sleeveZ(k));
   put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, 0, 0, outputAngle, group);
-  put(new THREE.BoxGeometry(0.2, 1.5, 0.16), 'dark', 'fork:' + k, false, 1.4, 0, null, group);
+  // フォーク。ドラムがある段階では、ドラムの手前まで伸ばし、溝へはまる赤いピンを付ける
+  const top = state.step >= STEP_DRUM ? DRUM_Y + 0.2 : 2.15;
+  put(new THREE.BoxGeometry(0.2, top - 0.65, 0.16), 'dark', 'fork:' + k, false, (top + 0.65) / 2, 0, null, group);
+  if (state.step >= STEP_DRUM) put(new THREE.CylinderGeometry(0.09, 0.09, 0.45).rotateZ(Math.PI / 2), 'key', 'fork:' + k, false, DRUM_Y, 0, null, group);
 }
 
 // フライホイール、クラッチディスク、プレッシャープレート
@@ -172,17 +183,18 @@ function buildScene() {
   const outputAngle = () => spin.output;
   const redUpper = A * c.z1 / (c.z1 + c.z2);
 
-  shaft('shaft:input', state.step >= STEP_CLUTCH ? -5.3 : -4.4, RED_Z + 0.5, 0, flow);
+  shaft('shaft:input', state.step >= STEP_CLUTCH ? -5.3 : -4.4, RED_Z + 0.5, 0, flow, inputAngle);
   put(gearGeometry(c.z1, redUpper, 0.5), 'steel', 'red', flow, 0, RED_Z, inputAngle);
   put(gearGeometry(c.z2, A - redUpper, 0.5), 'steel', 'red', flow, -A, RED_Z, counterAngle);
-  shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow);
+  shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow, counterAngle);
 
-  if (state.step >= STEP_OUTPUT) shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow);
+  if (state.step >= STEP_OUTPUT) shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
   list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle));
   if (state.step >= STEP_SLEEVE) {
     for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, outputAngle);
     put(cylinder(0.07, endZ - 0.5), 'dark', 'fork:0', false, 2.15, (endZ - 1.5) / 2);   // フォークが滑る棒
   }
+  if (state.step >= STEP_DRUM) buildDrum();   // シフトドラム（drum.js）
   if (state.step >= STEP_CLUTCH) addClutch(flow);
   if (state.step >= STEP_TIRE) addTire(endZ + 0.5, flow);
 }
@@ -198,10 +210,13 @@ function frameCamera() {
   let to = state.step === 1 ? 0 : gearZ(Math.max(shownGears().length - 1, 0)) + 2;
   if (state.step >= STEP_TIRE) to += 2.5;
   const half = Math.tan(camera.fov * Math.PI / 360);
-  const distance = Math.max((to - from) / 2 / (half * camera.aspect), 3.4 / half) * 1.25;
+  const drum = state.step >= STEP_DRUM;      // ドラムがあると、図が上に高くなる
+  const height = drum ? 4.4 : 3.4;
+  const centerY = drum ? -0.4 : -A / 2;
+  const distance = Math.max((to - from) / 2 / (half * camera.aspect), height / half) * 1.25;
   const middle = (from + to) / 2;
-  controls.target.set(middle, -A / 2, 0);
-  camera.position.set(middle + distance * 0.3, -A / 2 + distance * 0.35, distance * 0.9);
+  controls.target.set(middle, centerY, 0);
+  camera.position.set(middle + distance * 0.3, centerY + distance * 0.35, distance * 0.9);
 }
 
 // ---------- 毎フレーム ----------
@@ -216,8 +231,12 @@ function frame(now) {
   spin.output += c.outRpm * perRpm;
   spin.tire += c.tireRpm * perRpm;
   spinners.forEach(s => { s.mesh.rotation[s.axis] = s.angle(); });
+  const drum = !state.detail && state.step >= STEP_DRUM;
+  if (drum) moveDrum(dt);
   sliders.forEach(s => {
-    sleeveNow[s.k] += (sleevePos(s.k) - sleeveNow[s.k]) * Math.min(1, dt * 10);
+    // ドラムがある段階では、スリーブは溝の形のとおりに動く。ない段階では、選んだ位置へ直接動く
+    if (drum) sleeveNow[s.k] = groovePos(s.k, drumNow);
+    else sleeveNow[s.k] += (sleevePos(s.k) - sleeveNow[s.k]) * Math.min(1, dt * 10);
     s.group.position.z = s.home + sleeveNow[s.k] * SLIDE;
   });
   if (state.detail) moveSynchro(dt);

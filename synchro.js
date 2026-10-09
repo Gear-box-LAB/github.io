@@ -31,7 +31,7 @@ function ringBodyGeometry() {
 function buildSynchro() {
   const p = { gear: partGroup(), ring: partGroup(), hub: partGroup(), keys: partGroup(), sleeve: partGroup() };
   synchroParts = p;
-  put(cylinder(0.3, 5.4), 'steel', 'shaft:output', false, 0, -0.5);
+  addMark(put(cylinder(0.3, 5.4), 'steel', 'shaft:output', false, 0, -0.5, null, p.hub), 0.3, 5.4);
 
   // ギヤ側: 空転ギヤ、ドグ歯、コーン（3つは一体で回る）
   put(gearGeometry(34, 1.7, 0.5), 'free', 'gear:0', false, 0, -1.64, null, p.gear);

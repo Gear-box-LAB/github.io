@@ -60,8 +60,8 @@ input[type="number"] { width: 100%; min-width: 60px; }
   min-width: 0;
 }
 .steps { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-block: 2px; }
-.steps button { font-size: 13px; padding: 4px 8px; }
-.group { font-size: 12px; color: var(--sub); white-space: nowrap; margin-left: 10px; }
+.steps button { font-size: 13px; padding: 4px 6px; }
+.group { font-size: 12px; color: var(--sub); white-space: nowrap; margin-left: 6px; }
 
 /* 作業台 */
 .bench { display: grid; grid-template-columns: 1fr 400px; min-height: 0; }

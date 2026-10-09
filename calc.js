@@ -10,13 +10,14 @@ const STEPS = [
   { name: 'スリーブ', gears: 1 },
   { name: '2速を足す', gears: 2 },
   { name: 'シンクロ', gears: 2 },
+  { name: 'シフトドラム', gears: 4 },
   { name: '6速とリバース', gears: MAX_GEARS },
   { group: '組んでみる', name: '設計する', gears: MAX_GEARS },
   { group: '周辺を知る', name: 'クラッチ', gears: MAX_GEARS },
   { name: 'タイヤ', gears: MAX_GEARS }
 ];
 // 部品が初めて出てくる段階
-const STEP_OUTPUT = 2, STEP_SLEEVE = 3, STEP_SYNCHRO = 5, STEP_DESIGN = 7, STEP_CLUTCH = 8, STEP_TIRE = 9;
+const STEP_OUTPUT = 2, STEP_SLEEVE = 3, STEP_SYNCHRO = 5, STEP_DRUM = 6, STEP_DESIGN = 8, STEP_CLUTCH = 9, STEP_TIRE = 10;
 
 const state = {
   step: 1,
@@ -43,6 +44,7 @@ const state = {
   ],
   // 以下は説明用の仮の値
   synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02, pitch: 0.045, chamfer: 60 },
+  drum: { radius: 0.025, stroke: 0.008, ramp: 40, torque: 3 },
   clutch: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
   car: { finalRatio: 4.1, tire: 0.63, mu: 1.0, load: 600 }
 };
@@ -109,6 +111,13 @@ function synchro(i, c) {
   const time = s.inertia * 2 * Math.PI * Math.abs(diff) / 60 / torque;
   const index = s.force * s.pitch / Math.tan(s.chamfer * Math.PI / 180);   // 歯先の斜面がリングを回そうとするトルク
   return { torque, diff, time, index };
+}
+
+// シフトドラム: 溝の傾きと、ドラムを回すトルクがフォークを押す力
+function drumCam() {
+  const d = state.drum;
+  const slope = d.stroke / (d.radius * d.ramp * Math.PI / 180);   // tan γ
+  return { slope, angle: Math.atan(slope) * 180 / Math.PI, force: d.torque / (d.radius * slope) };
 }
 
 // クラッチ: 摩擦面の平均半径と、伝えられる最大トルク（摩擦面は表と裏の2面）
