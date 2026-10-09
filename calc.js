@@ -24,6 +24,10 @@ const state = {
   gear: NEUTRAL,        // 今つながっているギヤの番号
   picked: null,         // 図でクリックした部品
   clutchOn: true,
+  detail: false,        // 段階5で、シンクロの拡大図を見ているか
+  phase: 0,             // 拡大図での、スリーブを押し込む段階（0〜3）
+  explode: false,       // 拡大図の部品を、軸方向にばらして見せる
+  clear: true,          // 拡大図のスリーブを透かす
   rpm: 3000,            // エンジン回転数
   torque: 200,          // エンジントルク (N·m)
   red: { drive: 20, driven: 30 },   // インプット軸 → カウンタ軸の減速ギヤの歯数
@@ -38,7 +42,7 @@ const state = {
     { name: 'R', out: 36, counter: 13, reverse: true }
   ],
   // 以下は説明用の仮の値
-  synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02 },
+  synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02, pitch: 0.045, chamfer: 60 },
   clutch: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
   car: { finalRatio: 4.1, tire: 0.63, mu: 1.0, load: 600 }
 };
@@ -103,7 +107,8 @@ function synchro(i, c) {
   const torque = s.mu * s.force * s.radius / Math.sin(s.angle * Math.PI / 180);
   const diff = freeRpm(i, c) - c.outRpm;
   const time = s.inertia * 2 * Math.PI * Math.abs(diff) / 60 / torque;
-  return { torque, diff, time };
+  const index = s.force * s.pitch / Math.tan(s.chamfer * Math.PI / 180);   // 歯先の斜面がリングを回そうとするトルク
+  return { torque, diff, time, index };
 }
 
 // クラッチ: 摩擦面の平均半径と、伝えられる最大トルク（摩擦面は表と裏の2面）

@@ -9,7 +9,7 @@ const SLIDE = 0.35;     // スリーブが動く量
 const SLOW = 1 / 40;    // 目で追えるように、回転を1/40の速さで見せる
 const COLOR = {
   stage: 0x17303a, steel: 0x9fb0b8, free: 0xeef2f3, power: 0xf0a81c, dark: 0x4a606b,
-  brass: 0xc9a24a, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff
+  brass: 0xc9a24a, key: 0xd9534f, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff
 };
 
 const canvas = el('stage');
@@ -30,30 +30,44 @@ world.add(box);
 let spinners = [];    // 回る部品: { mesh, angle（今の角度を返す関数）, axis }
 let sliders = [];     // スリーブ: { group, k, home }
 const sleeveNow = [0, 0, 0, 0];                              // スリーブの今の位置（-1〜1）
-const spin = { engine: 0, input: 0, output: 0, tire: 0 };    // 各軸が今までに回った角度
+const spin = { engine: 0, input: 0, output: 0, tire: 0, hub: 0, dog: 0 };    // 各軸が今までに回った角度
 
 const gearZ = i => Math.floor(i / 2) * GROUP + (i % 2) * PAIR;
 const sleeveZ = k => k * GROUP + PAIR / 2;
 
 // ---------- 形 ----------
-// 歯車。歯の大きさ（モジュール）は 2 × 半径 ÷ 歯数
-function gearGeometry(count, radius, width) {
+// 歯車の輪郭（点の並び）。歯の大きさ（モジュール）は 2 × 半径 ÷ 歯数
+function toothOutline(count, radius) {
   const m = 2 * radius / count;
   const tip = radius + m * 0.9;
   const root = radius - m * 1.1;
   const pitch = 2 * Math.PI / count;
-  const outline = [[-0.5, root], [-0.3, root], [-0.15, tip], [0.15, tip], [0.3, root]];   // 歯1枚ぶん
+  const tooth = [[-0.5, root], [-0.3, root], [-0.15, tip], [0.15, tip], [0.3, root]];   // 歯1枚ぶん
   const points = [];
   for (let k = 0; k < count; k++) {
-    outline.forEach(([offset, r]) => {
+    tooth.forEach(([offset, r]) => {
       const a = (k + offset) * pitch;
       points.push(new THREE.Vector2(r * Math.cos(a), r * Math.sin(a)));
     });
   }
-  const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(points), { depth: width, bevelEnabled: false });
+  return points;
+}
+
+// 円の輪郭
+function circle(radius) {
+  return new THREE.Path().absarc(0, 0, radius, 0, 2 * Math.PI).getPoints(48);
+}
+
+// 輪郭を軸方向に押し出して、板にする。hole を渡すと、その形の穴があく
+function extrude(outline, hole, width) {
+  const shape = new THREE.Shape(outline);
+  if (hole) shape.holes.push(new THREE.Path(hole));
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
   geometry.translate(0, 0, -width / 2);
   return geometry;
 }
+
+const gearGeometry = (count, radius, width) => extrude(toothOutline(count, radius), null, width);
 
 // 円柱（軸方向は z）。sides を小さくすると多角形になり、回転が見える
 function cylinder(radius, length, sides) {
@@ -147,6 +161,7 @@ function buildScene() {
   box.children.slice().forEach(child => box.remove(child));
   spinners = [];
   sliders = [];
+  if (state.detail) return buildSynchro();   // シンクロの拡大図（synchro.js）
 
   const c = calc(state.gear);
   const list = shownGears();
@@ -174,6 +189,11 @@ function buildScene() {
 
 // 今の段階の部品が全部入るように、カメラを置き直す
 function frameCamera() {
+  if (state.detail) {
+    controls.target.set(-0.7, 0, 0);
+    camera.position.set(1.6, 2.4, 8.5 / Math.min(1, camera.aspect));
+    return;
+  }
   const from = state.step >= STEP_CLUTCH ? -6 : -4.6;
   let to = state.step === 1 ? 0 : gearZ(Math.max(shownGears().length - 1, 0)) + 2;
   if (state.step >= STEP_TIRE) to += 2.5;
@@ -200,6 +220,7 @@ function frame(now) {
     sleeveNow[s.k] += (sleevePos(s.k) - sleeveNow[s.k]) * Math.min(1, dt * 10);
     s.group.position.z = s.home + sleeveNow[s.k] * SLIDE;
   });
+  if (state.detail) moveSynchro(dt);
   controls.update();
   renderer.render(world, camera);
   requestAnimationFrame(frame);

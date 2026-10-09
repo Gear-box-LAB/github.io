@@ -28,8 +28,11 @@
     <div class="bar">
       <div class="buttons" id="gearButtons"></div>
       <button type="button" id="clutchButton" hidden></button>
-      <label>エンジン回転数 <input type="number" id="rpm" value="3000" min="0" step="100"> rpm</label>
-      <label>トルク <input type="number" id="torque" value="200" min="1" step="10"> N·m</label>
+      <div class="buttons" id="detailButtons"></div>
+      <div class="buttons" id="engineInputs">
+        <label>エンジン回転数 <input type="number" id="rpm" value="3000" min="0" step="100"> rpm</label>
+        <label>トルク <input type="number" id="torque" value="200" min="1" step="10"> N·m</label>
+      </div>
     </div>
   </section>
 
@@ -55,6 +58,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="calc.js"></script>
 <script src="scene.js"></script>
+<script src="synchro.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -27,6 +27,15 @@ function allGearsTable() {
     }));
 }
 
+// ---------- シンクロの拡大図（段階5）で、スリーブを押し込んでいく順番 ----------
+const PHASES = [
+  { name: '中立', text: 'スリーブはハブの真ん中にあります。ギヤ（白）はスリーブやハブと違う速さで回っています。リング（金色）はコーンから少し離れていて、ハブと一緒に回ります。' },
+  { name: '押し付ける', text: 'スリーブを押すと、キー（赤）が一緒に動いてリングを押し、リングの内側がギヤのコーンに当たります。摩擦でリングが歯半分だけ回され、リングの歯がスリーブの通り道をふさぎます。押している間、摩擦でギヤの回転がハブの回転に近づいていきます。' },
+  { name: '通り抜ける', text: '回転がそろうと、リングを回していた摩擦の力がなくなります。スリーブの歯先の斜面がリングを元の位置へ押し戻し、スリーブはリングの歯の間を通り抜けます。' },
+  { name: 'かみ合う', text: 'スリーブがギヤのドグ歯にかみ合いました。ギヤ、スリーブ、ハブ、アウトプット軸が一体で回り、力が伝わります。' }
+];
+const DETAIL_GUIDE = '色の見分け方: 金色 = シンクロナイザリング、赤 = キー、白 = ギヤとドグ歯、灰色の円すい = コーン、歯の付いた灰色 = ハブ、外側の輪 = スリーブ。部品をクリックすると説明が開きます。実物のコーンはもっと浅い角度で、見やすいように大きく描いています。';
+
 // ---------- 段階ごとの説明 ----------
 // structure = 構造の文章、symbols = 記号の説明、formula = 式の行、extra = 表など、inputs = [[ラベル, stateの場所, キー]]
 const LESSONS = [
@@ -107,17 +116,20 @@ const LESSONS = [
   },
   {
     title: 'シンクロが、つなぐ前に回転を合わせる',
-    structure: () => [
+    structure: () => state.detail ? [`<b>${state.phase + 1}. ${PHASES[state.phase].name}</b>`, PHASES[state.phase].text, DETAIL_GUIDE] : [
+      '図の下の「シンクロを拡大して見る」を押すと、スリーブの内側の部品と、押し込んでいく順番を見られます。',
       '回転差があるままスリーブを押し込むと、歯どうしがぶつかって入りません。先に回転を合わせる部品が、シンクロナイザリング（図の金色の輪）です。',
       'スリーブを押すと、リングがギヤ側の円すい面（コーン）に押し付けられ、摩擦でギヤの回転をアウトプット軸の回転に近づけます。',
       '回転差がある間は、リングの歯がスリーブの通り道をふさぎます。回転がそろうと道が開き、スリーブがドグ歯に入ります。'
     ],
-    symbols: 'μ: 摩擦係数、F: スリーブを押す力、R: コーンの平均半径、α: コーン角、J: 回転を変える側（クラッチディスク、インプット軸、カウンタ軸、ギヤ）の慣性モーメントを、そのギヤの軸に換算した値。数値は説明用の仮の値です。',
-    inputs: [['押す力 F (N)', 'synchro', 'force'], ['摩擦係数 μ', 'synchro', 'mu'], ['コーン角 α (°)', 'synchro', 'angle'], ['慣性モーメント J (kg·m²)', 'synchro', 'inertia']],
+    symbols: 'μ: 摩擦係数、F: スリーブを押す力、R: コーンの平均半径、α: コーン角、J: 回転を変える側（クラッチディスク、インプット軸、カウンタ軸、ギヤ）の慣性モーメントを、そのギヤの軸に換算した値。' + sub('R', 'b') + ': 歯先の斜面がある半径、β: 歯先の斜面の角度（軸の向きから測った値）。通り道をふさぐトルクの式は、斜面の摩擦を無視した簡略式です。数値は説明用の仮の値です。',
+    inputs: [['押す力 F (N)', 'synchro', 'force'], ['摩擦係数 μ', 'synchro', 'mu'], ['コーン角 α (°)', 'synchro', 'angle'], ['慣性モーメント J (kg·m²)', 'synchro', 'inertia'], ['歯先の斜面の角度 β (°)', 'synchro', 'chamfer']],
     formula: c => {
       const s = state.synchro;
       return [
         ['コーンの摩擦トルク', `${T_S} = μ × F × R / sin α`, `${s.mu} × ${s.force} × ${s.radius} ÷ sin ${s.angle}° = ${n1(synchro(0, c).torque)} N·m`],
+        ['リングを戻そうとするトルク', `${sub('T', 'i')} = F × ${sub('R', 'b')} / tan β`, `${s.force} × ${s.pitch} ÷ tan ${s.chamfer}° = ${n1(synchro(0, c).index)} N·m`],
+        ['通り道をふさげる条件', `${T_S} > ${sub('T', 'i')}`, synchro(0, c).torque > synchro(0, c).index ? '成り立つ。回転がそろうまでスリーブは入らない' : '成り立たない。回転がそろう前にスリーブが入り、ギヤ鳴りが起きる'],
         ['回転差', `Δn = ${N_G} − ${N_OUT}`, '下の表'],
         ['合わせるのにかかる時間', `t = J × 2π × |Δn| / 60 / ${T_S}`, '下の表']
       ];
@@ -260,6 +272,26 @@ function partInfo(part) {
     text: 'スリーブとギヤの間にある、円すい面を持つ輪です。押し付けられた摩擦で、ギヤと軸の回転差を0にします。',
     rows: [['コーンの摩擦トルク', `${T_S} = μ × F × R / sin α`, `${n1(synchro(0, c).torque)} N·m`]]
   };
+  if (part === 'dog') return {
+    title: 'ドグ歯',
+    text: 'ギヤの側面にある小さい歯で、ギヤと一体です。スリーブの内側の歯がここにかみ合うと、ギヤと軸がつながります。歯先は、入りやすいようにとがっています。',
+    rows: [['つながった後の回転数', `${N_G} = ${N_OUT}`, '回転差は0']]
+  };
+  if (part === 'cone') return {
+    title: 'ギヤ側のコーン',
+    text: 'ギヤと一体の円すい面です。シンクロナイザリングの内側がここに押し付けられ、摩擦でギヤの回転を変えます。',
+    rows: [['コーンの摩擦トルク', `${T_S} = μ × F × R / sin α`, `${n1(synchro(0, c).torque)} N·m。α が小さいほど大きくなる`]]
+  };
+  if (part === 'key') return {
+    title: 'キー（シンクロナイザキー）',
+    text: 'ハブの溝に入った小さな部品で、ばねでスリーブの内側に押し付けられています。スリーブが動き始めると一緒に動き、リングをコーンへ押し付けます。リングに当たると止まり、スリーブだけが先へ進みます。',
+    rows: [['役割', '最初にリングを押す', '回転差を0にする力は、この後スリーブの歯先がリングを押して出す']]
+  };
+  if (part === 'hub') return {
+    title: 'ハブ',
+    text: 'アウトプット軸に固定された部品です。外側の歯にスリーブがはまっていて、スリーブは軸と一緒に回りながら左右に滑れます。',
+    rows: [['回転数', `ハブ = ${N_OUT}`, 'アウトプット軸と同じ']]
+  };
   if (part === 'clutch') return {
     title: 'クラッチ',
     text: '歯の付いた円板がフライホイール、茶色がクラッチディスク、右の板がプレッシャープレートです。ディスクだけがインプット軸とつながっています。',
@@ -283,11 +315,25 @@ function renderSteps() {
 }
 
 function renderGearButtons() {
-  const names = state.step >= STEP_SLEEVE ? ['N'].concat(shownGears().map(g => safe(g.name))) : [];
+  const names = state.step >= STEP_SLEEVE && !state.detail ? ['N'].concat(shownGears().map(g => safe(g.name))) : [];
   el('gearButtons').innerHTML = names.map((name, i) =>
     `<button type="button" data-gear="${i - 1}" class="${i - 1 === state.gear ? 'current' : ''}">${name}</button>`).join('');
   el('clutchButton').hidden = state.step < STEP_CLUTCH;
   el('clutchButton').textContent = state.clutchOn ? 'クラッチを切る' : 'クラッチをつなぐ';
+  el('engineInputs').hidden = state.detail;
+}
+
+// 段階5だけに出る、シンクロの拡大図のボタン
+function renderDetailButtons() {
+  const toggle = (key, name) => `<button type="button" data-toggle="${key}" class="${state[key] ? 'current' : ''}">${name}</button>`;
+  let html = '';
+  if (state.step === STEP_SYNCHRO && !state.detail) html = '<button type="button" data-toggle="detail">シンクロを拡大して見る</button>';
+  if (state.detail) {
+    html = PHASES.map((p, i) => `<button type="button" data-phase="${i}" class="${i === state.phase ? 'current' : ''}">${i + 1} ${p.name}</button>`).join('')
+      + toggle('explode', '分解して見る') + toggle('clear', 'スリーブを透かす')
+      + '<button type="button" data-toggle="detail">全体に戻る</button>';
+  }
+  el('detailButtons').innerHTML = html;
 }
 
 // 入力欄。打っている途中で消えないように、段階やタブが変わったときだけ作り直す
@@ -333,6 +379,7 @@ function renderBubble() {
 function update() {
   renderSteps();
   renderGearButtons();
+  renderDetailButtons();
   renderLesson();
   renderBubble();
   buildScene();
@@ -344,6 +391,7 @@ function showStep(step) {
   state.gear = NEUTRAL;
   state.picked = null;
   state.clutchOn = true;
+  state.detail = false;
   renderInputs();
   update();
   frameCamera();
@@ -378,6 +426,21 @@ el('gearButtons').addEventListener('click', e => {
 });
 el('clutchButton').addEventListener('click', () => {
   state.clutchOn = !state.clutchOn;
+  update();
+});
+el('detailButtons').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.phase) state.phase = Number(d.phase);
+  if (d.toggle) state[d.toggle] = !state[d.toggle];
+  if (d.toggle === 'detail') {
+    // 拡大図に入るときと出るときは、最初の状態に戻して、カメラを置き直す
+    state.phase = 0;
+    state.gear = NEUTRAL;
+    state.picked = null;
+    update();
+    frameCamera();
+    return;
+  }
   update();
 });
 el('bubbleClose').addEventListener('click', () => pick(null));
