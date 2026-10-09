@@ -74,6 +74,11 @@ function cylinder(radius, length, sides) {
   return new THREE.CylinderGeometry(radius, radius, length, sides || 32).rotateX(Math.PI / 2);
 }
 
+// value を target へ、最大 step だけ近づける
+function approach(value, target, step) {
+  return value + Math.max(-step, Math.min(step, target - value));
+}
+
 // 歯車Aとかみ合う歯車Bの角度。beta = AからBを見た向き
 function meshAngle(angleA, teethA, teethB, beta) {
   return (beta - angleA) * teethA / teethB + beta + Math.PI - Math.PI / teethB;
@@ -143,10 +148,12 @@ function addSleeve(k, flow, outputAngle) {
   sliders.push({ group, k, home: sleeveZ(k) });
   put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, 0, sleeveZ(k));
   put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, 0, 0, outputAngle, group);
-  // フォーク。ドラムがある段階では、ドラムの手前まで伸ばし、溝へはまる赤いピンを付ける
-  const top = state.step >= STEP_DRUM ? DRUM_Y + 0.2 : 2.15;
+  // フォーク。ドラム式では、ドラムの手前まで伸ばして、溝へはまる赤いピンを付ける。H型では、シフトロッドにつなぐ
+  const shift = shiftType();
+  const top = { none: 2.15, drum: DRUM_Y + 0.2, lever: RAIL_Y }[shift];
   put(new THREE.BoxGeometry(0.2, top - 0.65, 0.16), 'dark', 'fork:' + k, false, (top + 0.65) / 2, 0, null, group);
-  if (state.step >= STEP_DRUM) put(new THREE.CylinderGeometry(0.09, 0.09, 0.45).rotateZ(Math.PI / 2), 'key', 'fork:' + k, false, DRUM_Y, 0, null, group);
+  if (shift === 'drum') put(new THREE.CylinderGeometry(0.09, 0.09, 0.45).rotateZ(Math.PI / 2), 'key', 'fork:' + k, false, DRUM_Y, 0, null, group);
+  if (shift === 'lever') addRail(group, k);   // シフトロッドとゲート（hshift.js）
 }
 
 // フライホイール、クラッチディスク、プレッシャープレート
@@ -192,9 +199,10 @@ function buildScene() {
   list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle));
   if (state.step >= STEP_SLEEVE) {
     for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, outputAngle);
-    put(cylinder(0.07, endZ - 0.5), 'dark', 'fork:0', false, 2.15, (endZ - 1.5) / 2);   // フォークが滑る棒
+    if (shiftType() !== 'lever') put(cylinder(0.07, endZ - 0.5), 'dark', 'fork:0', false, 2.15, (endZ - 1.5) / 2);   // フォークが滑る棒
   }
-  if (state.step >= STEP_DRUM) buildDrum();   // シフトドラム（drum.js）
+  if (shiftType() === 'drum') buildDrum();     // シフトドラム（drum.js）
+  if (shiftType() === 'lever') buildLever();   // シフトレバー（hshift.js）
   if (state.step >= STEP_CLUTCH) addClutch(flow);
   if (state.step >= STEP_TIRE) addTire(endZ + 0.5, flow);
 }
@@ -210,9 +218,9 @@ function frameCamera() {
   let to = state.step === 1 ? 0 : gearZ(Math.max(shownGears().length - 1, 0)) + 2;
   if (state.step >= STEP_TIRE) to += 2.5;
   const half = Math.tan(camera.fov * Math.PI / 360);
-  const drum = state.step >= STEP_DRUM;      // ドラムがあると、図が上に高くなる
-  const height = drum ? 4.4 : 3.4;
-  const centerY = drum ? -0.4 : -A / 2;
+  // ドラムやレバーがあると、図が上に高くなる
+  const height = { none: 3.4, drum: 4.4, lever: 5 }[shiftType()];
+  const centerY = { none: -A / 2, drum: -0.4, lever: 0.3 }[shiftType()];
   const distance = Math.max((to - from) / 2 / (half * camera.aspect), height / half) * 1.25;
   const middle = (from + to) / 2;
   controls.target.set(middle, centerY, 0);
@@ -231,11 +239,13 @@ function frame(now) {
   spin.output += c.outRpm * perRpm;
   spin.tire += c.tireRpm * perRpm;
   spinners.forEach(s => { s.mesh.rotation[s.axis] = s.angle(); });
-  const drum = !state.detail && state.step >= STEP_DRUM;
-  if (drum) moveDrum(dt);
+  const shift = state.detail ? 'none' : shiftType();
+  if (shift === 'drum') moveDrum(dt);
+  if (shift === 'lever') moveLever(dt);
   sliders.forEach(s => {
-    // ドラムがある段階では、スリーブは溝の形のとおりに動く。ない段階では、選んだ位置へ直接動く
-    if (drum) sleeveNow[s.k] = groovePos(s.k, drumNow);
+    // ドラム式では溝の形のとおりに、H型ではレバーが押しているロッドだけが動く。どちらもない段階では、選んだ位置へ直接動く
+    if (shift === 'drum') sleeveNow[s.k] = groovePos(s.k, drumNow);
+    else if (shift === 'lever') sleeveNow[s.k] = s.k === leverNow.rail ? leverNow.s : 0;
     else sleeveNow[s.k] += (sleevePos(s.k) - sleeveNow[s.k]) * Math.min(1, dt * 10);
     s.group.position.z = s.home + sleeveNow[s.k] * SLIDE;
   });

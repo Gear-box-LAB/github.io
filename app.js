@@ -38,6 +38,12 @@ const PHASES = [
 ];
 const DETAIL_GUIDE = '色の見分け方: 金色 = シンクロナイザリング、赤 = キー、白 = ギヤとドグ歯、灰色の円すい = コーン、歯の付いた灰色 = ハブ、外側の輪 = スリーブ。部品をクリックすると説明が開きます。実物のコーンはもっと浅い角度で、見やすいように大きく描いています。';
 
+// 今の段階の説明。方式で内容が変わる段階は、{ drum: …, lever: … } の形で持っている
+function currentLesson() {
+  const lesson = LESSONS[state.step - 1];
+  return lesson[state.type] || lesson;
+}
+
 // ---------- 段階ごとの説明 ----------
 // structure = 構造の文章、symbols = 記号の説明、formula = 式の行、extra = 表など、inputs = [[ラベル, stateの場所, キー]]
 const LESSONS = [
@@ -139,7 +145,7 @@ const LESSONS = [
     extra: c => table(['入れる段', '回転差 (rpm)', '時間 (秒)'],
       shownGears().map((g, i) => [safe(g.name), n0(synchro(i, c).diff), n2(synchro(i, c).time)]))
   },
-  {
+  { drum: {
     title: 'シフトドラムが回り、溝がフォークを動かす',
     structure: () => [
       '3速と4速を足して、スリーブとフォークを2組にしました。フォークの奥にある、溝の彫られた筒がシフトドラムです。フォークの赤いピンが、溝にはまっています。',
@@ -167,13 +173,36 @@ const LESSONS = [
       return table(['ドラムの位置'].concat(forks.map(k => `フォーク${k + 1}`)),
         drumOrder().map((gear, j) => [gearName(gear)].concat(forks.map(k => names[forkAt(k, j)]))));
     }
-  },
+  }, lever: {
+    title: 'シフトレバーが、ロッドを選んで、押す',
+    structure: () => [
+      '3速と4速を足して、スリーブとフォークを2組にしました。乗用車のMTでは、フォークは1本ずつ別の棒（シフトロッド）に固定されています。ロッドが前後に動くと、フォークとスリーブも一緒に動きます。',
+      'シフトレバー（赤）には2つの動きがあります。左右に倒す「セレクト」で、どのロッドを動かすかを選びます。前後に倒す「シフト」で、選んだロッドを押します。',
+      'ロッドの上の金色の受け（ゲート）は、ニュートラルのとき横一列に並びます。レバーはこの列の中だけを横に動けるので、別のロッドへ移るには、必ずニュートラルを通ります。これがH型のシフトパターンになる理由です。',
+      '図の下のH型のボタンを押すと、レバーが「ニュートラルへ戻る → 横へ動く → 押す」の順に動きます。ドラム式と違い、1速から4速へ直接行けます。',
+      '実物には、2本のロッドが同時に動かないようにするインターロックと、ロッドを各位置で止めるディテント（ばねで押した玉）があります。図では省いています。レバーの支点の位置や、レバーからロッドまでのつなぎ方は車種で違い、この図は動きがわかる単純な形です。'
+    ],
+    symbols: `a: 支点からノブまでの長さ、b: 支点からロッドを押す点までの長さ、x: フォークが動く量、${sub('F', 'h')}: 手で押す力、F: ロッドを押す力。摩擦は入れていません。数値は説明用の仮の値です。`,
+    inputs: [['支点からノブまで a (m)', 'lever', 'knob'], ['支点から押す点まで b (m)', 'lever', 'gate'], ['フォークが動く量 x (m)', 'lever', 'stroke'], ['手で押す力 (N)', 'lever', 'hand']],
+    formula: () => {
+      const l = state.lever, r = leverCalc();
+      return [
+        ['レバー比', `${sub('i', 'L')} = a / b`, `${l.knob} ÷ ${l.gate} = ${n1(r.ratio)}`],
+        ['ノブの動く量', `x × ${sub('i', 'L')}`, `${l.stroke} × ${n1(r.ratio)} = ${n2(r.travel)} m`],
+        ['ロッドを押す力', `F = ${sub('F', 'h')} × ${sub('i', 'L')}`, `${l.hand} × ${n1(r.ratio)} = ${n0(r.force)} N（この力がシンクロを押す）`]
+      ];
+    },
+    extra: () => table(['段', '使うロッド', 'ロッドを動かす向き'],
+      shownGears().map((g, i) => [safe(g.name), `ロッド${Math.floor(i / 2) + 1}`, i % 2 === 0 ? '前（エンジン側）' : '後ろ']))
+  } },
   {
     title: '同じ仕組みを並べると6速になる',
     structure: () => [
       'ギヤの組が6つ、スリーブが3個に増えました。どの段でも、力の通り道は「インプット軸 → カウンタ軸 → 選んだギヤ → アウトプット軸」です。',
       'リバースは、2枚のギヤの間にアイドラギヤを1枚はさみます。歯車は1回かみ合うごとに向きが逆になるので、3枚だとアウトプット軸が逆に回ります。',
-      'ドラムの並びは「R → N → 1速 → 2速 …」です。R は N の手前にあるので、前進の段を上げ下げしている間に R を通ることはありません。',
+      state.type === 'drum'
+        ? 'ドラムの並びは「R → N → 1速 → 2速 …」です。R は N の手前にあるので、前進の段を上げ下げしている間に R を通ることはありません。'
+        : 'リバースは、4本目のロッドが受け持ちます。H型のパターンでは、いちばん端の列がリバースです。R の位置は車種で違います。',
       '高い段ほど変速比は小さくなり、回転は速く、トルクは小さくなります。変速比が1より小さい段をオーバードライブと呼びます。',
       '実際の縦置き用ギヤボックスには、インプット軸とアウトプット軸を直接つなぐ「直結」の段（変速比1）を持つものが多くあります。このサイトではまだ扱っていません。'
     ],
@@ -185,7 +214,9 @@ const LESSONS = [
     title: '歯数を変えて、自分のギヤボックスを組む',
     structure: () => [
       '歯数を変えると、図の歯車の大きさと、数式タブの値が変わります。ギヤは8組まで足せます。',
-      '「リバース」に印を付けた段は、ドラムの並びで N の手前に入ります（R → N → 前進の段）。'
+      state.type === 'drum'
+        ? '「リバース」に印を付けた段は、ドラムの並びで N の手前に入ります（R → N → 前進の段）。'
+        : 'H型のパターンは、表の上から2段ずつが1本のロッド（1つの列）になります。'
     ],
     symbols: 'a: 軸間距離、m: モジュール（歯の大きさ）。どの組も同じ2本の軸に並ぶので、軸間距離は同じです。モジュールが同じなら、歯数の和も同じになります。実際のギヤボックスは、組ごとにモジュールやねじれ角を変えて、軸間距離を合わせています。',
     formula: () => [['軸間距離', `a = m × (${Z_C} + ${Z_OUT}) / 2`, '歯数の和は下の表']],
@@ -303,9 +334,27 @@ function partInfo(part) {
       ['フォークを押す力', `F = ${sub('T', 'd')} / (r × tan γ)`, `${n0(drumCam().force)} N`]
     ]
   };
+  if (part === 'lever') return {
+    title: 'シフトレバー',
+    text: '下の玉が支点です。左右に倒すとロッドを選び（セレクト）、前後に倒すと選んだロッドを押します（シフト）。ノブは大きく動き、ロッドを押す点は小さく強く動きます。',
+    rows: [
+      ['レバー比', `${sub('i', 'L')} = a / b`, n1(leverCalc().ratio)],
+      ['ロッドを押す力', `F = ${sub('F', 'h')} × ${sub('i', 'L')}`, `${n0(leverCalc().force)} N`]
+    ]
+  };
+  if (part === 'rail') return {
+    title: 'シフトロッド',
+    text: 'フォークが固定された棒です。フォーク1本につき1本あり、前後に滑ります。フォークロッド、シフトレールとも呼びます。',
+    rows: [['動く量', 'ロッド = フォーク = スリーブ', '3つは一体で動く']]
+  };
+  if (part === 'gate') return {
+    title: 'ゲート',
+    text: 'ロッドの上にある、レバーの先を受ける部分です。ニュートラルでは全部のゲートが横一列に並び、レバーが横へ動けます。1本を押すと列がずれるので、ほかのロッドへは移れません。',
+    rows: [['横へ動ける条件', '全部のロッドが中立', 'だから、段を変えるときは必ず N を通る']]
+  };
   if (kind === 'fork') return {
     title: 'シフトフォーク',
-    text: 'スリーブの溝にはまっている二股の部品です。自分は回らず、棒の上を滑って、回っているスリーブを左右に押します。ドラムがある段階では、先の赤いピンがドラムの溝にはまっていて、溝に沿って動きます。',
+    text: 'スリーブの溝にはまっている二股の部品です。自分は回らず、回っているスリーブを左右に押します。ドラム式では、先の赤いピンがドラムの溝にはまっていて、溝に沿って動きます。H型では、シフトロッドに固定されていて、ロッドと一緒に動きます。',
     rows: [['動く量', '中立から左右へ', 'スリーブがドグ歯に届くぶんだけ']]
   };
   if (part === 'synchro') return {
@@ -352,14 +401,25 @@ function partInfo(part) {
 function renderSteps() {
   el('steps').innerHTML = STEPS.map((s, i) =>
     (s.group ? `<span class="group">${s.group}</span>` : '') +
-    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1} ${s.name}</button>`).join('');
+    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1} ${stepName(s)}</button>`).join('');
+  el('types').innerHTML = TYPES.map(t =>
+    `<button type="button" data-type="${t.id}" class="${t.id === state.type ? 'current' : ''}">${t.name}</button>`).join('');
 }
 
 function renderGearButtons() {
   // ドラムの並び順（リバース → N → 前進の段）でボタンを並べる
+  const button = (gear, extra) =>
+    `<button type="button" data-gear="${gear}" class="${extra} ${gear === state.gear ? 'current' : ''}">${gearName(gear)}</button>`;
   const order = state.step >= STEP_SLEEVE && !state.detail ? drumOrder() : [];
-  el('gearButtons').innerHTML = order.map(gear =>
-    `<button type="button" data-gear="${gear}" class="${gear === state.gear ? 'current' : ''}">${gearName(gear)}</button>`).join('');
+  let html = order.map(gear => button(gear, '')).join('');
+  if (shiftType() === 'lever' && !state.detail) {
+    // H型のパターン: 列 = ロッド。上の行 = 前へ押す段、真ん中 = N、下の行 = 後ろへ引く段
+    const rails = [...Array(sleeveCount()).keys()];
+    const cell = gear => gear < shownGears().length ? button(gear, '') : '<span></span>';
+    html = `<div class="gate" style="--columns: ${rails.length}">`
+      + rails.map(k => cell(k * 2)).join('') + button(NEUTRAL, 'wide') + rails.map(k => cell(k * 2 + 1)).join('') + '</div>';
+  }
+  el('gearButtons').innerHTML = html;
   el('clutchButton').hidden = state.step < STEP_CLUTCH;
   el('clutchButton').textContent = state.clutchOn ? 'クラッチを切る' : 'クラッチをつなぐ';
   el('engineInputs').hidden = state.detail;
@@ -380,7 +440,7 @@ function renderDetailButtons() {
 
 // 入力欄。打っている途中で消えないように、段階やタブが変わったときだけ作り直す
 function renderInputs() {
-  const lesson = LESSONS[state.step - 1];
+  const lesson = currentLesson();
   let html = '';
   if (state.tab === 'formula' && lesson.inputs) {
     html = '<div class="fields">' + lesson.inputs.map(f =>
@@ -399,7 +459,7 @@ function renderInputs() {
 }
 
 function renderLesson() {
-  const lesson = LESSONS[state.step - 1];
+  const lesson = currentLesson();
   const c = calc(state.gear);
   el('lessonTitle').textContent = lesson.title;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
@@ -428,13 +488,19 @@ function update() {
 }
 
 // ---------- 操作 ----------
+// ドラムとレバーを、動かさずに N の位置へ戻す
+function resetShift() {
+  resetDrum();
+  resetLever();
+}
+
 function showStep(step) {
   state.step = Math.min(STEPS.length, Math.max(1, step));
   state.gear = NEUTRAL;
   state.picked = null;
   state.clutchOn = true;
   state.detail = false;
-  resetDrum();
+  resetShift();
   renderInputs();
   update();
   frameCamera();
@@ -449,6 +515,11 @@ function pick(part, x, y) {
   el('bubble').style.top = Math.max(8, Math.min(y + 12, stage.clientHeight - el('bubble').offsetHeight - 8)) + 'px';
 }
 
+el('types').addEventListener('click', e => {
+  if (!e.target.dataset.type) return;
+  state.type = e.target.dataset.type;
+  showStep(state.step);
+});
 el('steps').addEventListener('click', e => {
   if (e.target.dataset.step) showStep(Number(e.target.dataset.step));
 });
@@ -501,7 +572,7 @@ el('lessonInputs').addEventListener('input', e => {
     if (d.key === 'reverse') {
       g.reverse = e.target.checked;
       state.gear = NEUTRAL;
-      resetDrum();
+      resetShift();
     }
     if (d.key === 'out' || d.key === 'counter') g[d.key] = teeth(e.target.value);
   }
@@ -516,7 +587,7 @@ el('lessonInputs').addEventListener('click', e => {
     return;
   }
   state.gear = NEUTRAL;
-  resetDrum();
+  resetShift();
   renderInputs();
   update();
 });

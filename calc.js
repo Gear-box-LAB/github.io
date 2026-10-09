@@ -3,6 +3,12 @@
 const NEUTRAL = -1;
 const MAX_GEARS = 8;
 
+// ギヤボックスの方式。ギヤ、スリーブ、シンクロは同じで、フォークの動かし方が違う
+const TYPES = [
+  { id: 'drum', name: 'シーケンシャル式（シンクロ＋シフトドラム）' },
+  { id: 'lever', name: 'H型シフト式（乗用車のMT）' }
+];
+
 // 学ぶ順番。gears = その段階で図に出すギヤの組の数
 const STEPS = [
   { group: '構造を知る', name: '歯車2枚', gears: 0 },
@@ -10,7 +16,7 @@ const STEPS = [
   { name: 'スリーブ', gears: 1 },
   { name: '2速を足す', gears: 2 },
   { name: 'シンクロ', gears: 2 },
-  { name: 'シフトドラム', gears: 4 },
+  { name: { drum: 'シフトドラム', lever: 'H型シフト' }, gears: 4 },   // 方式で名前が変わる
   { name: '6速とリバース', gears: MAX_GEARS },
   { group: '組んでみる', name: '設計する', gears: MAX_GEARS },
   { group: '周辺を知る', name: 'クラッチ', gears: MAX_GEARS },
@@ -20,6 +26,7 @@ const STEPS = [
 const STEP_OUTPUT = 2, STEP_SLEEVE = 3, STEP_SYNCHRO = 5, STEP_DRUM = 6, STEP_DESIGN = 8, STEP_CLUTCH = 9, STEP_TIRE = 10;
 
 const state = {
+  type: 'drum',         // 方式（TYPES の id）
   step: 1,
   tab: 'structure',     // 'structure'（構造）か 'formula'（数式）
   gear: NEUTRAL,        // 今つながっているギヤの番号
@@ -45,6 +52,7 @@ const state = {
   // 以下は説明用の仮の値
   synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02, pitch: 0.045, chamfer: 60 },
   drum: { radius: 0.025, stroke: 0.008, ramp: 40, torque: 3 },
+  lever: { knob: 0.21, gate: 0.03, stroke: 0.01, hand: 60 },
   clutch: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
   car: { finalRatio: 4.1, tire: 0.63, mu: 1.0, load: 600 }
 };
@@ -56,6 +64,10 @@ const n1 = value => value.toFixed(1);
 const n2 = value => value.toFixed(2);
 const teeth = value => Math.min(80, Math.max(8, Math.round(Number(value) || 8)));
 const positive = value => Math.max(0.001, Number(value) || 0.001);
+
+// フォークを動かす仕組み: 'none'（まだ出てこない段階）、'drum'、'lever'
+const shiftType = () => state.step >= STEP_DRUM ? state.type : 'none';
+const stepName = step => step.name[state.type] || step.name;
 
 const shownGears = () => state.gears.slice(0, STEPS[state.step - 1].gears);
 
@@ -126,6 +138,13 @@ function drumCam() {
   const d = state.drum;
   const slope = d.stroke / (d.radius * d.ramp * Math.PI / 180);   // tan γ
   return { slope, angle: Math.atan(slope) * 180 / Math.PI, force: d.torque / (d.radius * slope) };
+}
+
+// シフトレバー: レバー比と、ノブの動く量、ロッドを押す力
+function leverCalc() {
+  const l = state.lever;
+  const ratio = l.knob / l.gate;
+  return { ratio, travel: l.stroke * ratio, force: l.hand * ratio };
 }
 
 // クラッチ: 摩擦面の平均半径と、伝えられる最大トルク（摩擦面は表と裏の2面）

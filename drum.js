@@ -58,6 +58,6 @@ function buildDrum() {
 // 毎フレーム: 選んだ段へ向かって、ドラムを一定の速さで回す
 function moveDrum(dt) {
   const target = drumOrder().indexOf(state.gear);
-  drumNow += Math.max(-DRUM_SPEED * dt, Math.min(DRUM_SPEED * dt, target - drumNow));
+  drumNow = approach(drumNow, target, DRUM_SPEED * dt);
   drumGroup.rotation.z = -drumNow * drumStep();
 }
