@@ -38,6 +38,7 @@ const state = {
   clear: true,          // 拡大図のスリーブを透かす
   zoomDrum: false,
   colors: 'study',      // 配色: 'study'（学習用）か 'real'（実物に近い色）
+  clutchMode: 'manual', // クラッチ操作: 'manual'（ペダルを手で動かす）か 'auto'（自動クラッチ、AMT）
   clutchDetail: false,  // 段階9で、多板クラッチの拡大図を見ているか
   clutchExplode: false, // 拡大図の板を、軸方向にばらして見せる
   clutchClear: true,    // 拡大図のかごを透かす

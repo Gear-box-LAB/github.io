@@ -40,6 +40,7 @@ const box = new THREE.Group();
 box.rotation.y = Math.PI / 2;
 world.add(box);
 
+let builtFlow = false;   // 今の図で、力の通り道を橙色にしているか
 let spinners = [];    // 回る部品: { mesh, angle（今の角度を返す関数）, axis }
 let sliders = [];     // スリーブ: { group, k, home }
 const sleeveNow = [0, 0, 0, 0];                              // スリーブの今の位置（-1〜1）
@@ -233,7 +234,9 @@ function buildScene() {
   const c = calc(state.gear);
   const list = shownGears();
   const endZ = gearZ(Math.max(list.length - 1, 0)) + 2;
-  const flow = c.rpm > 0 && (state.step === 1 || c.engaged);   // 力がタイヤ側まで通っている
+  // 力がタイヤ側まで通っている。クラッチの段階からは、クラッチがつながって力を伝えているときだけ
+  const flow = state.step >= STEP_CLUTCH ? sim.transmitting && c.engaged : c.rpm > 0 && (state.step === 1 || c.engaged);
+  builtFlow = flow;
   const inputAngle = () => spin.input;
   const counterAngle = () => meshAngle(spin.input, c.z1, c.z2, -Math.PI / 2);
   const outputAngle = () => spin.output;
@@ -345,13 +348,14 @@ function frame(now) {
 }
 
 // ---------- 大きさ合わせとクリック ----------
+// 図の大きさ = 操作の帯を除いた、canvas の大きさ
 new ResizeObserver(() => {
-  const width = el('stageBox').clientWidth;
-  const height = el('stageBox').clientHeight;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-}).observe(el('stageBox'));
+}).observe(canvas);
 
 // ドラッグ（視点の回転）とクリック（部品を選ぶ）を、動いた距離で見分ける
 const ray = new THREE.Raycaster();

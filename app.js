@@ -242,23 +242,26 @@ const LESSONS = [
   {
     title: 'クラッチは、摩擦で力をつなぎ、切る。途中なら滑りながら伝える',
     structure: () => (state.clutch.type === 'multi' ? [
-      '<b>多板クラッチ</b>: エンジン側に付いた「かご」（クラッチバスケット）の内側の溝に、摩擦板（茶色）の外側の爪が入ります。インプット軸に付いた「ハブ」の外側の歯に、鋼の板（スチールプレート）の内側の歯が入ります。2種類の板を交互に重ね、ばねの力でプレッシャープレートが押し付けます。',
+      '<b>多板クラッチ</b>: エンジン側に付いた「かご」（クラッチバスケット）の内側の溝に、ドライブプレート（茶色）の外側の爪が入ります。インプット軸に付いた「ハブ」の外側の歯に、ドリブンプレート（鋼の板）の内側の歯が入ります。2種類の板を交互に重ね、ばねの力でプレッシャープレートが押し付けます。この図では、摩擦材をドライブプレート側に付けています（バイクの湿式多板の例）。摩擦材をどちらに付けるかは、設計によって違います。',
+      '<b>回る・回らない</b>: ドライブプレートは、エンジンが回っていれば、いつもエンジンと同じ速さで回ります。ドリブンプレートは、つながっているとエンジンと同じ速さで回ります。切れているときは、ニュートラルなら軸受けの抵抗で少しずつ止まり、段に入っていれば車輪に回されて、車の速さに合った回転数で回ります。湿式は、切れていてもオイルの粘りで少しだけ引きずられるので、止まるまでに少し時間がかかります（引きずりトルク）。',
       '摩擦面の数が多いので、直径が小さくても大きいトルクを伝えられます。バイクのクラッチは、オイルの中で使う湿式の多板が多く、レース車には乾式の多板が使われます。図は、バイクの湿式多板クラッチを例にした形です。'
     ] : [
       '<b>単板クラッチ</b>: エンジンと一体のフライホイールとプレッシャープレートが、ばねの力でクラッチディスク（茶色）をはさみます。ディスクはインプット軸にはまっていて、摩擦でエンジンの回転が伝わります。乗用車のMTの多くはこの形です。図では、ばね（ダイヤフラムスプリング）を省いています。'
     ]).concat([
-      '<b>半クラッチ</b>: ペダルを途中まで戻すと、押し付ける力が弱くなり、伝えられるトルクが小さくなります。エンジン側とインプット軸側が違う速さで回りながら（滑りながら）力を伝えます。これが半クラッチです。' + (state.clutch.type === 'multi' ? '図では、茶色の摩擦板と鋼の板が違う速さで回るのが見えます。' : '図では、ディスクとフライホイールが違う速さで回るのが見えます。') + '滑っている間、伝えたトルク × 回転差のぶんが熱になります。',
+      '<b>切れているとき</b>: エンジンの力は後ろへ伝わりません。図の橙色（力の通り道）が消えます。車は惰性で走り、転がり抵抗と空気の抵抗で少しずつ遅くなります。',
+      '<b>半クラッチ</b>: ペダルを途中まで戻すと、押し付ける力が弱くなり、伝えられるトルクが小さくなります。エンジン側とインプット軸側が違う速さで回りながら（滑りながら）力を伝えます。これが半クラッチです。' + (state.clutch.type === 'multi' ? '図では、茶色のドライブプレートと鋼のドリブンプレートが違う速さで回るのが見えます。' : '図では、ディスクとフライホイールが違う速さで回るのが見えます。') + '滑っている間、伝えたトルク × 回転差のぶんが熱になります。',
       '<b>操作</b>: 図の下のクラッチペダルを動かしてください。20%までは完全につながり、70%以上で切れます。段を変えるときは、ペダルを70%以上踏んでから段のボタンを押します。発進は、ペダルを踏んで1速に入れ、ゆっくり戻します。急に戻すと回転数が大きく下がり、エンジン回転数を低くしているとエンストします。',
-      'エンジン回転数の欄は、運転者がアクセルで保とうとする回転数です。車は、地面の摩擦や空気の抵抗がない想定で、タイヤの回転が車速になります。'
+      '<b>自動クラッチ（AMT）</b>: 図の下の「自動クラッチ（AMT）」を選ぶと、機械がクラッチ操作を代わりに行います。段を押すと「クラッチを切る → 段を変える → 半クラッチでつなぐ」を自動で行います。「D」を押すと、停車中は1速で発進し、エンジン回転数が目標に近づくと1段ずつ上げます。MTの部品をそのまま使って、操作だけを自動にした仕組みです。',
+      'エンジン回転数の欄は、運転者（AMTでは制御）がアクセルで保とうとする回転数です。タイヤは地面に対して滑らない想定で、タイヤの回転が車速になります。'
     ]),
     symbols: `μ: 摩擦係数、F: 板を押し付ける力、${sub('R', 'o')} と ${sub('R', 'i')}: 摩擦面の外側と内側の半径、N: 摩擦面の数、e: ペダルで決まる押し付けの割合（1 = 完全につながる、0 = 切れている）、${sub('T', 'e')}: エンジントルク、Δn: エンジン側とインプット軸側の回転差、${sub('J', 'v')}: 車の質量 m をインプット軸から見た慣性モーメント、r: タイヤの半径。数値は説明用の仮の値です。`,
-    inputs: [['摩擦係数 μ', 'clutch', 'mu'], ['押し付ける力 F (N)', 'clutch', 'force'], ['外側の半径 (m)', 'clutch', 'outer'], ['内側の半径 (m)', 'clutch', 'inner'], ['摩擦板の枚数（多板）', 'clutch', 'plates']],
+    inputs: [['摩擦係数 μ', 'clutch', 'mu'], ['押し付ける力 F (N)', 'clutch', 'force'], ['外側の半径 (m)', 'clutch', 'outer'], ['内側の半径 (m)', 'clutch', 'inner'], ['ドライブプレートの枚数（多板）', 'clutch', 'plates']],
     formula: () => {
       const k = state.clutch, r = clutch(), c = calc(state.gear);
       const slip = sim.engine - sim.input;
       return [
         ['摩擦面の平均半径', `${sub('R', 'm')} = 2/3 × (${sub('R', 'o')}³ − ${sub('R', 'i')}³) / (${sub('R', 'o')}² − ${sub('R', 'i')}²)`, `${r.radius.toFixed(4)} m`],
-        ['摩擦面の数', k.type === 'single' ? 'N = 2（ディスクの表と裏）' : 'N = 2 × 摩擦板の枚数', `${r.surfaces}`],
+        ['摩擦面の数', k.type === 'single' ? 'N = 2（ディスクの表と裏）' : 'N = 2 × ドライブプレートの枚数', `${r.surfaces}`],
         ['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × N`, `${k.mu} × ${k.force} × ${r.radius.toFixed(4)} × ${r.surfaces} = ${n0(r.capacity)} N·m（余裕 ${n2(r.margin)}）`],
         ['今のペダルで伝えられるトルク', `e × ${T_C}`, `${n2(engage())} × ${n0(r.capacity)} = ${n0(engage() * r.capacity)} N·m`],
         ['回転差（滑り）', `Δn = ${sub('n', 'e')} − ${N_IN}`, `${n0(sim.engine)} − ${n0(sim.input)} = ${n0(slip)} rpm`],
@@ -499,12 +502,12 @@ function partInfo(part) {
   if (kind === 'clutch') {
     const names = {
       flywheel: ['フライホイール', 'エンジンのクランク軸に付いた重い円板です。外周の歯は、エンジンをかけるスターター用です。エンジン側の部品は、全部これと一緒に回ります。'],
-      friction: ['摩擦板（フリクションプレート）', '表と裏に摩擦材が貼られた板です。外側の爪がかごの溝に入り、エンジン側と一緒に回ります。'],
-      steel: ['鋼の板（スチールプレート）', '摩擦板と交互に重なる鋼の板です。内側の歯がハブの歯に入り、インプット軸と一緒に回ります。'],
+      friction: ['ドライブプレート', 'エンジン側の板です。外側の爪がかごの溝に入り、エンジンが回っていれば、いつもエンジンと同じ速さで回ります。この図では、表と裏に摩擦材が付いています。'],
+      steel: ['ドリブンプレート', 'インプット軸側の鋼の板です。内側の歯がハブの歯に入ります。つながっているとエンジンと同じ速さで回り、切れているとニュートラルなら少しずつ止まり、段に入っていれば車輪に回されます。'],
       disc: ['クラッチディスク', '単板クラッチの、表と裏に摩擦材が貼られた円板です。中心がインプット軸にはまっています。'],
       pressure: ['プレッシャープレート', 'ばねの力で板の束を押し付ける板です。エンジン側と一緒に回ります。'],
-      basket: ['かご（クラッチバスケット）', '摩擦板とプレッシャープレートの外側の爪が入る溝を持つ、エンジン側の入れ物です。中が見えるように透かしています。'],
-      hub: ['クラッチハブ', 'インプット軸と一体の部品です。外側の歯に、鋼の板（単板ではディスク）がはまります。'],
+      basket: ['かご（クラッチバスケット）', 'ドライブプレートとプレッシャープレートの外側の爪が入る溝を持つ、エンジン側の入れ物です。中が見えるように透かしています。'],
+      hub: ['クラッチハブ', 'インプット軸と一体の部品です。外側の歯に、ドリブンプレート（単板ではディスク）がはまります。'],
       spring: ['クラッチスプリング', 'プレッシャープレートを押して、板どうしを押し付けるばねです。この力が、伝えられるトルクを決めます。'],
       release: ['レリーズベアリング', 'ペダルを踏むと前へ出て、ばねを縮め、押し付ける力を抜きます（図は簡略化しています）。']
     };
@@ -513,7 +516,7 @@ function partInfo(part) {
       title, text,
       rows: [
         ['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × N`, `${n0(clutch().capacity)} N·m（N = ${clutch().surfaces}）`],
-        ['今の回転', 'エンジン側 / インプット軸側', `${n0(sim.engine)} / ${n0(sim.input)} rpm`]
+        ['今の回転', 'ドライブ側（エンジン） / ドリブン側（インプット軸）', `${n0(sim.engine)} / ${n0(sim.input)} rpm`]
       ]
     };
   }
@@ -553,6 +556,11 @@ function renderGearButtons() {
   }
   el('gearButtons').innerHTML = html;
   el('pedalBox').hidden = state.step < STEP_CLUTCH;
+  // クラッチ操作の切り替え。自動のときは、ペダルは機械が動かすので触れない
+  const mode = (id, name) => `<button type="button" data-mode="${id}" class="${state.clutchMode === id ? 'current' : ''}">${name}</button>`;
+  el('clutchMode').innerHTML = mode('manual', '手動クラッチ') + mode('auto', '自動クラッチ（AMT）')
+    + (state.clutchMode === 'auto' ? `<button type="button" data-drive="true" class="${amt.drive ? 'current' : ''}">D（自動で変速）</button>` : '');
+  el('pedal').disabled = state.clutchMode === 'auto';
   el('simReadout').hidden = state.step < STEP_CLUTCH;
   el('engineInputs').hidden = state.detail;
 }
@@ -656,6 +664,10 @@ function showSim(dt) {
   simShownAt = 0;
   el('simReadout').innerHTML = simReadout();
   el('restartEngine').hidden = !sim.stalled;
+  el('pedal').value = Math.round(sim.pedal * 100);
+  el('pedalValue').textContent = Math.round(sim.pedal * 100) + '%';
+  // 力が伝わるかどうかが変わったら、橙色を付け直すために図を作り直す
+  if ((sim.transmitting && calc(state.gear).engaged) !== builtFlow && !state.detail && !state.clutchDetail) buildScene();
   if (state.tab === 'formula' && state.step === STEP_CLUTCH) renderLesson();
 }
 
@@ -710,13 +722,28 @@ el('tabs').addEventListener('click', e => {
 el('gearButtons').addEventListener('click', e => {
   if (e.target.dataset.gear === undefined) return;
   // クラッチの段階からは、クラッチを切らないと段を変えられない（clutch.js）
-  if (state.step >= STEP_CLUTCH) shiftWithClutch(Number(e.target.dataset.gear));
-  else state.gear = Number(e.target.dataset.gear);
+  const gear = Number(e.target.dataset.gear);
+  if (state.step >= STEP_CLUTCH && state.clutchMode === 'auto') {
+    // 自動クラッチ: 段を選ぶと、機械がクラッチを切って、変えて、つなぐ。D の自動変速はやめる
+    amt.drive = false;
+    requestShift(gear);
+  } else if (state.step >= STEP_CLUTCH) shiftWithClutch(gear);
+  else state.gear = gear;
   update();
 });
 el('pedal').addEventListener('input', e => {
   sim.pedal = Number(e.target.value) / 100;
   el('pedalValue').textContent = e.target.value + '%';
+});
+el('clutchMode').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.mode) {
+    state.clutchMode = d.mode;
+    amt.drive = false;
+    amt.phase = 'idle';
+  }
+  if (d.drive) amt.drive = !amt.drive;
+  update();
 });
 el('restartEngine').addEventListener('click', () => {
   sim.stalled = false;

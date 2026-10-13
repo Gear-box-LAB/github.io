@@ -1,11 +1,11 @@
 // clutch.js: クラッチ（段階9から）。単板と多板の形、多板の拡大図、半クラッチの動き（簡単な物理計算）
 //
 // 多板クラッチ（バイクの湿式多板クラッチを例にした形）
-//   エンジン側: フライホイール、かご（バスケット）、摩擦板（茶色、外側の爪がかごの溝に入る）、プレッシャープレート、ばね
-//   インプット軸側: ハブ（外側の歯）、鋼の板（スチールプレート、内側の歯がハブの歯に入る）
-//   摩擦板と鋼の板を交互に重ね、ばねの力で押し付けて、摩擦で回転を伝える
+//   エンジン側: フライホイール、かご（バスケット）、ドライブプレート（茶色、外側の爪がかごの溝に入る）、プレッシャープレート、ばね
+//   インプット軸側: ハブ（外側の歯）、ドリブンプレート（鋼の板、内側の歯がハブの歯に入る）
+//   ドライブプレートとドリブンプレートを交互に重ね、ばねの力で押し付けて、摩擦で回転を伝える
 
-const PLATE_T = 0.07;       // 摩擦板と鋼の板の厚さ
+const PLATE_T = 0.07;       // ドライブプレートとドリブンプレートの厚さ
 const GAP_MAX = 0.035;      // ペダルを踏み切ったときの、板と板のすき間
 const EXPLODE_GAP = 0.35;   // 「分解して見る」で、板と板の間に足す間隔
 const MAIN_Z0 = -6.4;       // 全体の図での、フライホイールの後ろの面の位置
@@ -28,7 +28,7 @@ function tabOutline(count, base, tab, width, offset) {
 // 長さ1の板（z = 0〜1）。scale.z で長さを変えて使う
 const unitExtrude = (outline, hole) => extrude(outline, hole, 1).translate(0, 0, 0.5);
 
-// 板の並び。多板: 摩擦板（f）と鋼の板（s）を交互に、両端は摩擦板。単板: クラッチディスク（d）が1枚
+// 板の並び。多板: ドライブプレート（f）とドリブンプレート（s）を交互に、両端はドライブプレート。単板: クラッチディスク（d）が1枚
 function plateOrder() {
   if (state.clutch.type === 'single') return ['d'];
   const order = [];
@@ -111,49 +111,77 @@ function buildClutchDetail() {
   buildClutch(-1);
 }
 
-// ---------- 半クラッチの物理計算 ----------
-// エンジン側と車側を、2つの回る物（慣性モーメント）として計算する
-//   滑っている間: エンジン側は「エンジントルク − クラッチのトルク」、車側は「クラッチのトルク」で回転が変わる
-//   滑っていない間: 2つが一体で回る
-// 運転者は、アクセルでエンジン回転数を「エンジン回転数」の欄の値に保とうとする
+// ---------- クラッチの物理計算 ----------
+// 回る物を3つに分けて計算する
+//   エンジン側: エンジン、フライホイール、ドライブプレート（いつもエンジンと同じ速さ）
+//   インプット軸側: ドリブンプレート、インプット軸、カウンタ軸、ギヤ
+//   車: 段に入っているときだけ、インプット軸側と一緒に動く（タイヤ、車の質量）
+// クラッチが切れていると、エンジンの力は後ろへ伝わらない。インプット軸側は抵抗で少しずつ遅くなり、
+// 段に入っていれば車と一緒に惰性で走って、走行抵抗で少しずつ遅くなる
+// 湿式（多板）は、切れていてもオイルの粘りで少しだけ引きずられる（引きずりトルク）
 
 const J_ENGINE = 0.15;      // エンジン側の慣性モーメント (kg·m²)
-const J_INPUT = 0.02;       // インプット軸側（クラッチの板、インプット軸、カウンタ軸、ギヤ）の慣性モーメント
+const J_INPUT = 0.02;       // インプット軸側の慣性モーメント (kg·m²)
 const CAR_MASS = 1000;      // 車の質量 (kg)
-const sim = { pedal: 0, engine: 3000, input: 3000, output: 0, torque: 0, slipping: false, stalled: false, message: '' };
-
+const BEARING = { fixed: 0.6, perRad: 0.004 };   // インプット軸側の軸受けとギヤ（オイルをかき回す）の抵抗: 0.6 N·m + 0.004 N·m × 角速度
+const WET_DRAG = 0.0012;    // 湿式の引きずり: 回転差 1 rad/s あたりの N·m
+const REV_LIMIT = 6500;     // 自動クラッチが許す、変速後のエンジン回転数の上限 (rpm)
+const ROAD = { rolling: 0.012, airCdA: 0.65, air: 1.2 };   // 転がり抵抗係数、空気抵抗（Cd × 前面投影面積 m²）、空気の密度 kg/m³
 const RPM = 2 * Math.PI / 60;   // rpm → rad/s
+const sim = { pedal: 0, engine: 3000, input: 3000, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' };
 
-// 車の質量を、インプット軸から見た慣性モーメントに直したもの（つながっている段があるときだけ）
+// 車の質量を、インプット軸から見た慣性モーメントに直したもの（段に入っているときだけ）
 function carInertia(c) {
   return c.engaged ? CAR_MASS * c.radius ** 2 / (c.total * c.final) ** 2 : 0;
 }
 
+// インプット軸側を止めようとするトルク（大きさ）。軸受けの抵抗と、段に入っていれば走行抵抗
+function inputLoad(c) {
+  const bearing = BEARING.fixed + BEARING.perRad * Math.abs(sim.input) * RPM;
+  if (!c.engaged || Math.abs(sim.output) < 1) return bearing;
+  const v = Math.abs(sim.output) / c.final * RPM * c.radius;   // 車速 (m/s)
+  const force = ROAD.rolling * CAR_MASS * 9.81 + 0.5 * ROAD.air * ROAD.airCdA * v * v;
+  return bearing + force * c.radius / Math.abs(c.total * c.final);
+}
+
+// value を、0 をまたがない範囲で amount だけ 0 に近づける（抵抗で止まるときに、逆に回り出さないように）
+const towardZero = (value, amount) => Math.sign(value) * Math.max(0, Math.abs(value) - amount);
+
 function resetSim() {
-  Object.assign(sim, { pedal: 0, engine: state.rpm, input: state.rpm, output: 0, torque: 0, slipping: false, stalled: false, message: '' });
+  Object.assign(sim, { pedal: 0, engine: state.rpm, input: state.rpm, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' });
+  Object.assign(amt, { phase: 'idle', drive: false, launch: false });
   el('pedal').value = 0;
 }
 
 function stepSim(dt) {
+  stepAmt(dt);   // 自動クラッチ（AMT）のときは、ペダルと段をここで操作する
   const c = calc(state.gear);
   const jIn = J_INPUT + carInertia(c);
+  const load = inputLoad(c);
   const engineTorque = sim.stalled ? 0 : Math.max(-20, Math.min(state.torque, 0.5 * (state.rpm - sim.engine)));
   const capacity = engage() * clutch().capacity;
-  const together = engineTorque * jIn / (J_ENGINE + jIn);   // 一体で回るときに、クラッチを通るトルク
   const slip = sim.engine - sim.input;
 
-  if (Math.abs(slip) < 20 && Math.abs(together) <= capacity) {
+  // つながっていられるか: エンジン側とインプット軸側が一体で回ると仮定して、クラッチを通るトルクが容量以下なら滑らない
+  const alpha = (engineTorque - Math.sign(sim.input || 1) * load) / (J_ENGINE + jIn);
+  const through = engineTorque - J_ENGINE * alpha;
+  if (capacity > 0 && Math.abs(slip) < 20 && Math.abs(through) <= capacity) {
     sim.slipping = false;
-    sim.torque = together;
-    sim.engine += engineTorque / (J_ENGINE + jIn) * dt / RPM;
+    sim.torque = through;
+    sim.engine += alpha * dt / RPM;
     sim.input = sim.engine;
   } else {
+    // 滑っている（半クラッチ）か、切れている。切れているときは、湿式の引きずりだけが伝わる
+    const drag = state.clutch.type === 'multi' ? WET_DRAG * slip * RPM : 0;
     sim.slipping = capacity > 0;
-    sim.torque = capacity * Math.sign(slip);
+    sim.torque = capacity * Math.sign(slip) + drag;
     sim.engine += (engineTorque - sim.torque) / J_ENGINE * dt / RPM;
     sim.input += sim.torque / jIn * dt / RPM;
+    sim.input = towardZero(sim.input, load / jIn * dt / RPM);
   }
-  if (c.engaged) sim.output = sim.input / c.total;   // 段に入っていれば、アウトプット軸はインプット軸と一緒に動く
+  if (c.engaged) sim.output = sim.input / c.total;   // 段に入っていれば、アウトプット軸と車はインプット軸と一緒に動く
+  else sim.output = towardZero(sim.output, 0.3 * dt / RPM);   // ニュートラルでは、車は惰性で走り、少しずつ遅くなる（簡略）
+  sim.transmitting = capacity > 0 && Math.abs(sim.torque) > 1;
   if (!sim.stalled && sim.engine < 400) {
     sim.stalled = true;
     sim.engine = Math.max(0, sim.engine);
@@ -174,11 +202,55 @@ function shiftWithClutch(gear) {
   if (c.engaged) sim.input = sim.output * c.total;
 }
 
+// ---------- 自動クラッチ（AMT: MTのクラッチ操作と変速を、機械が代わりに行う） ----------
+// 1回の変速: クラッチを切る（0.15秒）→ 段を変える（0.25秒、シンクロが回転を合わせる）→ クラッチをつなぐ
+// つなぐときは、半クラッチの範囲（ペダル70%〜20%）だけゆっくり動かす。発進のときは、さらにゆっくり
+// D（自動で変速）: 停車中は1速で発進し、エンジン回転数が目標に近づいたら1段上げ、1300 rpm を下回ったら1段下げる
+
+const amt = { phase: 'idle', timer: 0, target: NEUTRAL, drive: false, launch: false };
+
+function requestShift(gear) {
+  if (gear === state.gear || amt.phase !== 'idle') return;
+  // 変えた後にエンジンが回りすぎる段には、変えない（エンジンを守る）
+  const after = gear === NEUTRAL ? 0 : Math.abs(sim.output * calc(gear).total);
+  if (after > REV_LIMIT) {
+    sim.message = `${gearName(gear)}に変えると、エンジンが約${n0(after)} rpm まで回ってしまうので、変えません（上限 ${REV_LIMIT} rpm）。`;
+    return;
+  }
+  sim.message = '';
+  Object.assign(amt, { phase: 'open', timer: 0, target: gear, launch: Math.abs(sim.output) < 50 });
+}
+
+function stepAmt(dt) {
+  if (state.clutchMode !== 'auto') return;
+  amt.timer += dt;
+  if (amt.phase === 'open') {
+    sim.pedal = Math.min(1, sim.pedal + dt / 0.15);
+    if (sim.pedal >= 1) Object.assign(amt, { phase: 'shift', timer: 0 });
+  } else if (amt.phase === 'shift' && amt.timer > 0.25) {
+    shiftWithClutch(amt.target);
+    Object.assign(amt, { phase: amt.target === NEUTRAL ? 'idle' : 'close', timer: 0 });
+    update();   // 段が変わったので、図とボタンを作り直す（app.js）
+  } else if (amt.phase === 'close') {
+    const half = sim.pedal < 0.7 && sim.pedal > 0.2;
+    const speed = !half ? 4 : amt.launch ? 0.35 : 1.2;   // 1秒あたりに戻すペダルの量
+    sim.pedal = Math.max(0, sim.pedal - speed * dt);
+    if (sim.pedal === 0) amt.phase = 'idle';
+  } else if (amt.phase === 'idle' && amt.drive) {
+    const forward = drumOrder().filter(g => g !== NEUTRAL && !state.gears[g].reverse);
+    const now = forward.indexOf(state.gear);
+    if (now < 0) requestShift(forward[0]);
+    else if (sim.engine > state.rpm - 150 && now < forward.length - 1) requestShift(forward[now + 1]);
+    else if (sim.engine < 1300 && now > 0) requestShift(forward[now - 1]);
+  }
+}
+
 // 図の下に出す、今の状態
 function simReadout() {
   const slip = sim.engine - sim.input;
-  const status = sim.stalled ? 'エンスト' : engage() === 0 ? '切れている' : sim.slipping ? '半クラッチ（滑っている）' : 'つながっている';
+  const status = sim.stalled ? 'エンスト' : engage() === 0 ? '切れている（エンジンの力は後ろへ伝わらない）' : sim.slipping ? '半クラッチ（滑りながら伝えている）' : 'つながっている';
   const speed = sim.output / state.car.finalRatio * 2 * Math.PI * state.car.tire / 2 * 60 / 1000;
-  return `エンジン ${n0(sim.engine)} rpm ／ インプット軸 ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ ${status} ／ 車速 ${n1(speed)} km/h`
+  const auto = state.clutchMode === 'auto' ? ` ／ 自動クラッチ: ${{ idle: '待機', open: 'クラッチを切っている', shift: '段を変えている', close: 'クラッチをつないでいる' }[amt.phase]}` : '';
+  return `エンジン（ドライブプレート） ${n0(sim.engine)} rpm ／ インプット軸（ドリブンプレート） ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ クラッチを通るトルク ${n0(sim.torque)} N·m ／ ${status} ／ 車速 ${n1(speed)} km/h${auto}`
     + (sim.message ? `<br><b>${sim.message}</b>` : '');
 }
