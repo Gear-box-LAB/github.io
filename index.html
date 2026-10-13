@@ -28,7 +28,10 @@
 
     <div class="bar">
       <div class="buttons" id="gearButtons"></div>
-      <button type="button" id="clutchButton" hidden></button>
+      <div class="buttons" id="pedalBox" hidden>
+        <label>クラッチペダル <input type="range" id="pedal" min="0" max="100" value="0"> <span id="pedalValue">0%</span></label>
+        <button type="button" id="restartEngine" hidden>エンジンをかけ直す</button>
+      </div>
       <div class="buttons" id="detailButtons"></div>
       <div class="buttons" id="engineInputs">
         <label>エンジン回転数 <input type="number" id="rpm" value="3000" min="0" step="100"> rpm</label>
@@ -39,6 +42,7 @@
           <option value="4">1/4の速さ</option>
         </select></label>
       </div>
+      <p class="readout" id="simReadout" hidden></p>
     </div>
   </section>
 
@@ -68,6 +72,7 @@
 <script src="drum.js"></script>
 <script src="hshift.js"></script>
 <script src="car.js"></script>
+<script src="clutch.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

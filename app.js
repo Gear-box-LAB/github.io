@@ -240,20 +240,31 @@ const LESSONS = [
       }))
   },
   {
-    title: 'クラッチは、摩擦で力をつなぎ、切る',
-    structure: () => [
-      'クラッチは、エンジンとインプット軸の間にあります。',
-      'エンジンと一体のフライホイールとプレッシャープレートが、ばねの力でクラッチディスク（茶色）をはさみます。ディスクはインプット軸にはまっていて、摩擦でエンジンの回転が伝わります。',
-      'ペダルを踏むとプレッシャープレートが離れ、ディスクが自由になります。インプット軸に力がかからなくなるので、シンクロが軽い力で回転を合わせられます。変速のたびにクラッチを切るのはこのためです。図の下の「クラッチを切る」を押してください。'
-    ],
-    symbols: `μ: 摩擦係数、F: ディスクをはさむ力、${sub('R', 'o')} と ${sub('R', 'i')}: 摩擦面の外側と内側の半径、${sub('T', 'e')}: エンジントルク。式の最後の2は、摩擦面がディスクの表と裏の2面あることを表します。数値は説明用の仮の値です。`,
-    inputs: [['摩擦係数 μ', 'clutch', 'mu'], ['はさむ力 F (N)', 'clutch', 'force'], ['外側の半径 (m)', 'clutch', 'outer'], ['内側の半径 (m)', 'clutch', 'inner']],
+    title: 'クラッチは、摩擦で力をつなぎ、切る。途中なら滑りながら伝える',
+    structure: () => (state.clutch.type === 'multi' ? [
+      '<b>多板クラッチ</b>: エンジン側に付いた「かご」（クラッチバスケット）の内側の溝に、摩擦板（茶色）の外側の爪が入ります。インプット軸に付いた「ハブ」の外側の歯に、鋼の板（スチールプレート）の内側の歯が入ります。2種類の板を交互に重ね、ばねの力でプレッシャープレートが押し付けます。',
+      '摩擦面の数が多いので、直径が小さくても大きいトルクを伝えられます。バイクのクラッチは、オイルの中で使う湿式の多板が多く、レース車には乾式の多板が使われます。図は、バイクの湿式多板クラッチを例にした形です。'
+    ] : [
+      '<b>単板クラッチ</b>: エンジンと一体のフライホイールとプレッシャープレートが、ばねの力でクラッチディスク（茶色）をはさみます。ディスクはインプット軸にはまっていて、摩擦でエンジンの回転が伝わります。乗用車のMTの多くはこの形です。図では、ばね（ダイヤフラムスプリング）を省いています。'
+    ]).concat([
+      '<b>半クラッチ</b>: ペダルを途中まで戻すと、押し付ける力が弱くなり、伝えられるトルクが小さくなります。エンジン側とインプット軸側が違う速さで回りながら（滑りながら）力を伝えます。これが半クラッチです。' + (state.clutch.type === 'multi' ? '図では、茶色の摩擦板と鋼の板が違う速さで回るのが見えます。' : '図では、ディスクとフライホイールが違う速さで回るのが見えます。') + '滑っている間、伝えたトルク × 回転差のぶんが熱になります。',
+      '<b>操作</b>: 図の下のクラッチペダルを動かしてください。20%までは完全につながり、70%以上で切れます。段を変えるときは、ペダルを70%以上踏んでから段のボタンを押します。発進は、ペダルを踏んで1速に入れ、ゆっくり戻します。急に戻すと回転数が大きく下がり、エンジン回転数を低くしているとエンストします。',
+      'エンジン回転数の欄は、運転者がアクセルで保とうとする回転数です。車は、地面の摩擦や空気の抵抗がない想定で、タイヤの回転が車速になります。'
+    ]),
+    symbols: `μ: 摩擦係数、F: 板を押し付ける力、${sub('R', 'o')} と ${sub('R', 'i')}: 摩擦面の外側と内側の半径、N: 摩擦面の数、e: ペダルで決まる押し付けの割合（1 = 完全につながる、0 = 切れている）、${sub('T', 'e')}: エンジントルク、Δn: エンジン側とインプット軸側の回転差、${sub('J', 'v')}: 車の質量 m をインプット軸から見た慣性モーメント、r: タイヤの半径。数値は説明用の仮の値です。`,
+    inputs: [['摩擦係数 μ', 'clutch', 'mu'], ['押し付ける力 F (N)', 'clutch', 'force'], ['外側の半径 (m)', 'clutch', 'outer'], ['内側の半径 (m)', 'clutch', 'inner'], ['摩擦板の枚数（多板）', 'clutch', 'plates']],
     formula: () => {
-      const k = state.clutch, r = clutch();
+      const k = state.clutch, r = clutch(), c = calc(state.gear);
+      const slip = sim.engine - sim.input;
       return [
         ['摩擦面の平均半径', `${sub('R', 'm')} = 2/3 × (${sub('R', 'o')}³ − ${sub('R', 'i')}³) / (${sub('R', 'o')}² − ${sub('R', 'i')}²)`, `${r.radius.toFixed(4)} m`],
-        ['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × 2`, `${k.mu} × ${k.force} × ${r.radius.toFixed(4)} × 2 = ${n0(r.capacity)} N·m`],
-        ['余裕', `${T_C} / ${sub('T', 'e')}`, `${n0(r.capacity)} ÷ ${n0(state.torque)} = ${n2(r.margin)}（${r.margin < 1 ? '1より小さいので滑る' : '1以上なので滑らない'}）`]
+        ['摩擦面の数', k.type === 'single' ? 'N = 2（ディスクの表と裏）' : 'N = 2 × 摩擦板の枚数', `${r.surfaces}`],
+        ['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × N`, `${k.mu} × ${k.force} × ${r.radius.toFixed(4)} × ${r.surfaces} = ${n0(r.capacity)} N·m（余裕 ${n2(r.margin)}）`],
+        ['今のペダルで伝えられるトルク', `e × ${T_C}`, `${n2(engage())} × ${n0(r.capacity)} = ${n0(engage() * r.capacity)} N·m`],
+        ['回転差（滑り）', `Δn = ${sub('n', 'e')} − ${N_IN}`, `${n0(sim.engine)} − ${n0(sim.input)} = ${n0(slip)} rpm`],
+        ['滑りで出る熱（仕事率）', `P = ${T_C}′ × 2π × Δn / 60`, `${n0(Math.abs(sim.torque))} × 2π × ${n0(Math.abs(slip))} / 60 = ${n1(Math.abs(sim.torque * slip) * RPM / 1000)} kW`],
+        ['車をインプット軸から見た慣性', `${sub('J', 'v')} = m × r² / (i × ${sub('i', 'f')})²`, c.engaged ? `${CAR_MASS} × ${n2(c.radius)}² ÷ (${n2(c.total)} × ${n2(c.final)})² = ${carInertia(c).toFixed(3)} kg·m²` : 'ニュートラルでは、車とつながっていない'],
+        ['半クラッチ中の回転の変化', `エンジン側: ${sub('J', 'e')} × dω/dt = ${sub('T', 'e')} − ${T_C}′、車側: (${sub('J', 'in')} + ${sub('J', 'v')}) × dω/dt = ${T_C}′`, `今クラッチを通るトルク ${T_C}′ = ${n0(sim.torque)} N·m`]
       ];
     }
   },
@@ -485,11 +496,27 @@ function partInfo(part) {
     text: 'アウトプット軸に固定された部品です。外側の歯にスリーブがはまっていて、スリーブは軸と一緒に回りながら左右に滑れます。',
     rows: [['回転数', `ハブ = ${N_OUT}`, 'アウトプット軸と同じ']]
   };
-  if (part === 'clutch') return {
-    title: 'クラッチ',
-    text: '歯の付いた円板がフライホイール、茶色がクラッチディスク、右の板がプレッシャープレートです。ディスクだけがインプット軸とつながっています。',
-    rows: [['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × 2`, `${n0(clutch().capacity)} N·m`]]
-  };
+  if (kind === 'clutch') {
+    const names = {
+      flywheel: ['フライホイール', 'エンジンのクランク軸に付いた重い円板です。外周の歯は、エンジンをかけるスターター用です。エンジン側の部品は、全部これと一緒に回ります。'],
+      friction: ['摩擦板（フリクションプレート）', '表と裏に摩擦材が貼られた板です。外側の爪がかごの溝に入り、エンジン側と一緒に回ります。'],
+      steel: ['鋼の板（スチールプレート）', '摩擦板と交互に重なる鋼の板です。内側の歯がハブの歯に入り、インプット軸と一緒に回ります。'],
+      disc: ['クラッチディスク', '単板クラッチの、表と裏に摩擦材が貼られた円板です。中心がインプット軸にはまっています。'],
+      pressure: ['プレッシャープレート', 'ばねの力で板の束を押し付ける板です。エンジン側と一緒に回ります。'],
+      basket: ['かご（クラッチバスケット）', '摩擦板とプレッシャープレートの外側の爪が入る溝を持つ、エンジン側の入れ物です。中が見えるように透かしています。'],
+      hub: ['クラッチハブ', 'インプット軸と一体の部品です。外側の歯に、鋼の板（単板ではディスク）がはまります。'],
+      spring: ['クラッチスプリング', 'プレッシャープレートを押して、板どうしを押し付けるばねです。この力が、伝えられるトルクを決めます。'],
+      release: ['レリーズベアリング', 'ペダルを踏むと前へ出て、ばねを縮め、押し付ける力を抜きます（図は簡略化しています）。']
+    };
+    const [title, text] = names[part.split(':')[1]];
+    return {
+      title, text,
+      rows: [
+        ['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × N`, `${n0(clutch().capacity)} N·m（N = ${clutch().surfaces}）`],
+        ['今の回転', 'エンジン側 / インプット軸側', `${n0(sim.engine)} / ${n0(sim.input)} rpm`]
+      ]
+    };
+  }
   return {
     title: '最終減速とタイヤ',
     text: '箱が最終減速ギヤ（デフ）です。アウトプット軸の回転をもう一度減速し、向きを90°変えて車軸とタイヤに伝えます。',
@@ -525,8 +552,8 @@ function renderGearButtons() {
       + rails.map(k => cell(k * 2)).join('') + button(NEUTRAL, 'wide') + rails.map(k => cell(k * 2 + 1)).join('') + '</div>';
   }
   el('gearButtons').innerHTML = html;
-  el('clutchButton').hidden = state.step < STEP_CLUTCH;
-  el('clutchButton').textContent = state.clutchOn ? 'クラッチを切る' : 'クラッチをつなぐ';
+  el('pedalBox').hidden = state.step < STEP_CLUTCH;
+  el('simReadout').hidden = state.step < STEP_CLUTCH;
   el('engineInputs').hidden = state.detail;
 }
 
@@ -536,6 +563,12 @@ function renderDetailButtons() {
   let html = '';
   if (state.car3d) html = toggle('carZoom', '動力の通り道に近づく');   // 車に載せているときは、近づく切り替えだけ出す
   else if (state.step === STEP_SYNCHRO && !state.detail) html = '<button type="button" data-toggle="detail">シンクロを拡大して見る</button>';
+  else if (state.clutchDetail) html = toggle('clutchExplode', '分解して見る') + toggle('clutchClear', 'かごを透かす') + '<button type="button" data-toggle="clutchDetail">全体に戻る</button>';
+  else if (state.step === STEP_CLUTCH) {
+    const type = (id, name) => `<button type="button" data-clutch="${id}" class="${state.clutch.type === id ? 'current' : ''}">${name}</button>`;
+    html = type('single', '単板クラッチ') + type('multi', '多板クラッチ')
+      + (state.clutch.type === 'multi' ? '<button type="button" data-toggle="clutchDetail">多板クラッチを詳しく見る</button>' : '');
+  }
   else if (state.step === STEP_DRUM && shiftType() === 'drum') html = toggle('zoomDrum', 'ドラムまわりを拡大して見る');
   if (state.detail) {
     html = PHASES.map((p, i) => `<button type="button" data-phase="${i}" class="${i === state.phase ? 'current' : ''}">${i + 1} ${p.name}</button>`).join('')
@@ -615,6 +648,17 @@ function update() {
   buildScene();
 }
 
+// クラッチの段階: 図の下の状態と、数式タブの値を、0.2秒ごとに書き換える（scene.js の毎フレームから呼ばれる）
+let simShownAt = 0;
+function showSim(dt) {
+  simShownAt += dt;
+  if (simShownAt < 0.2) return;
+  simShownAt = 0;
+  el('simReadout').innerHTML = simReadout();
+  el('restartEngine').hidden = !sim.stalled;
+  if (state.tab === 'formula' && state.step === STEP_CLUTCH) renderLesson();
+}
+
 // ---------- 操作 ----------
 // ドラムとレバーを、動かさずに N の位置へ戻す
 function resetShift() {
@@ -626,7 +670,8 @@ function showStep(step) {
   state.step = Math.min(STEPS.length, Math.max(1, step));
   state.gear = NEUTRAL;
   state.picked = null;
-  state.clutchOn = true;
+  state.clutchDetail = false;
+  resetSim();
   state.detail = false;
   state.zoomDrum = false;
   resetShift();
@@ -664,17 +709,36 @@ el('tabs').addEventListener('click', e => {
 
 el('gearButtons').addEventListener('click', e => {
   if (e.target.dataset.gear === undefined) return;
-  state.gear = Number(e.target.dataset.gear);
+  // クラッチの段階からは、クラッチを切らないと段を変えられない（clutch.js）
+  if (state.step >= STEP_CLUTCH) shiftWithClutch(Number(e.target.dataset.gear));
+  else state.gear = Number(e.target.dataset.gear);
   update();
 });
-el('clutchButton').addEventListener('click', () => {
-  state.clutchOn = !state.clutchOn;
-  update();
+el('pedal').addEventListener('input', e => {
+  sim.pedal = Number(e.target.value) / 100;
+  el('pedalValue').textContent = e.target.value + '%';
+});
+el('restartEngine').addEventListener('click', () => {
+  sim.stalled = false;
+  sim.engine = state.rpm;
+  sim.message = '';
 });
 el('detailButtons').addEventListener('click', e => {
   const d = e.target.dataset;
   if (d.phase) state.phase = Number(d.phase);
   if (d.toggle) state[d.toggle] = !state[d.toggle];
+  if (d.clutch) {
+    // 種類を変えたら、その種類の仮の値に入れ替える
+    Object.assign(state.clutch, { type: d.clutch }, CLUTCH_PRESETS[d.clutch]);
+    renderInputs();
+  }
+  if (d.toggle === 'clutchDetail') {
+    state.car3d = false;
+    state.picked = null;
+    update();
+    frameCamera();
+    return;
+  }
   if (d.toggle === 'zoomDrum' || d.toggle === 'carZoom') frameCamera();
   if (d.toggle === 'detail') {
     // 拡大図に入るときと出るときは、最初の状態に戻して、カメラを置き直す
@@ -714,6 +778,7 @@ el('lessonInputs').addEventListener('input', e => {
   const d = e.target.dataset;
   if (d.sleeve) state.sleeveSide[Number(d.sleeve)] = e.target.value;
   if (d.obj) state[d.obj][d.key] = d.obj === 'red' ? teeth(e.target.value) : positive(e.target.value);
+  if (d.key === 'plates') state.clutch.plates = Math.min(8, Math.max(1, Math.round(state.clutch.plates)));   // 板の枚数は1〜8の整数
   if (d.i) {
     const g = state.gears[Number(d.i)];
     if (d.key === 'name') g.name = e.target.value;

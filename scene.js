@@ -206,13 +206,6 @@ function addFork(group, k, sleeveY, forkX) {
   }
 }
 
-// フライホイール、クラッチディスク、プレッシャープレート
-function addClutch(on) {
-  const gap = state.clutchOn ? 0 : 0.3;   // 切ると、プレッシャープレートが離れる
-  put(gearGeometry(72, 1.7, 0.35), 'steel', 'clutch', false, 0, -5.6, () => spin.engine);
-  put(cylinder(1.35, 0.12, 10), 'disc', 'clutch', on, 0, -5.36 + gap / 2, () => spin.input);
-  put(cylinder(1.5, 0.2, 12), 'dark', 'clutch', false, 0, -5.2 + gap, () => spin.engine);
-}
 
 // 最終減速（デフ）、車軸、タイヤ
 function addTire(z, on) {
@@ -233,7 +226,9 @@ function buildScene() {
   world.background.set(palette().stage);
   placeBox();                                 // 車に載せるときは縮小して置く（car.js）
   if (state.car3d) buildCar();
+  pack = null;
   if (state.detail) return buildSynchro();   // シンクロの拡大図（synchro.js）
+  if (state.clutchDetail) return buildClutchDetail();   // 多板クラッチの拡大図（clutch.js）
 
   const c = calc(state.gear);
   const list = shownGears();
@@ -244,7 +239,7 @@ function buildScene() {
   const outputAngle = () => spin.output;
   const redUpper = A * c.z1 / (c.z1 + c.z2);
 
-  shaft('shaft:input', state.step >= STEP_CLUTCH ? -5.3 : -4.4, RED_Z + 0.5, 0, flow, inputAngle);
+  shaft('shaft:input', state.step >= STEP_CLUTCH ? MAIN_Z0 : -4.4, RED_Z + 0.5, 0, flow, inputAngle);
   put(gearGeometry(c.z1, redUpper, 0.5), 'steel', 'red', flow, 0, RED_Z, inputAngle);
   put(gearGeometry(c.z2, A - redUpper, 0.5), 'steel', 'red', flow, -A, RED_Z, counterAngle);
   shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow, counterAngle);
@@ -257,7 +252,7 @@ function buildScene() {
   }
   if (shiftType() === 'drum') buildDrum();     // シフトドラム（drum.js）
   if (shiftType() === 'lever') buildLever();   // シフトレバー（hshift.js）
-  if (state.step >= STEP_CLUTCH) addClutch(flow);
+  if (state.step >= STEP_CLUTCH) buildClutch(MAIN_Z0);   // クラッチ（clutch.js）
   if (state.step >= STEP_TIRE && !state.car3d) addTire(endZ + 0.5, flow);   // 車に載せたときは、車のタイヤを使う
 }
 
@@ -287,12 +282,17 @@ function frameCamera() {
     camera.position.set(middle + distance * 0.15, DRUM_Y + distance * 0.03, distance);
     return;
   }
+  if (state.clutchDetail) {
+    controls.target.set(0.2, -0.4, 0);
+    camera.position.set(3, 2, 10.5 / Math.min(1, camera.aspect));
+    return;
+  }
   if (state.detail) {
     controls.target.set(-0.7, 0, 0);
     camera.position.set(1.6, 2.4, 8.5 / Math.min(1, camera.aspect));
     return;
   }
-  const from = state.step >= STEP_CLUTCH ? -6 : -4.6;
+  const from = state.step >= STEP_CLUTCH ? -7 : -4.6;
   let to = state.step === 1 ? 0 : gearZ(Math.max(shownGears().length - 1, 0)) + 2;
   if (state.step >= STEP_TIRE) to += 2.5;
   const half = Math.tan(camera.fov * Math.PI / 360);
@@ -312,10 +312,21 @@ function frame(now) {
   lastTime = now;
   const c = calc(state.gear);
   const perRpm = 2 * Math.PI / 60 / state.slow * dt;   // 1rpmあたり、このフレームで進む角度（目で追えるように、1/slow の速さで見せる）
-  spin.engine += state.rpm * perRpm;
-  spin.input += c.rpm * perRpm;
-  spin.output += c.outRpm * perRpm;
-  spin.tire += c.tireRpm * perRpm;
+  if (state.step >= STEP_CLUTCH) {
+    // クラッチの段階からは、半クラッチの計算（clutch.js）の回転数で回す
+    stepSim(dt);
+    spin.engine += sim.engine * perRpm;
+    spin.input += sim.input * perRpm;
+    spin.output += sim.output * perRpm;
+    spin.tire += sim.output / c.final * perRpm;
+    if (pack) movePack(dt);
+    showSim(dt);   // 図の下の表示（app.js）
+  } else {
+    spin.engine += state.rpm * perRpm;
+    spin.input += c.rpm * perRpm;
+    spin.output += c.outRpm * perRpm;
+    spin.tire += c.tireRpm * perRpm;
+  }
   spinners.forEach(s => { s.mesh.rotation[s.axis] = s.angle(); });
   const shift = state.detail ? 'none' : shiftType();
   if (shift === 'drum') moveDrum(dt);

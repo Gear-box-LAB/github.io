@@ -31,7 +31,6 @@ const state = {
   tab: 'structure',     // 'structure'（構造）か 'formula'（数式）
   gear: NEUTRAL,        // 今つながっているギヤの番号
   picked: null,         // 図でクリックした部品
-  clutchOn: true,
   sleeveSide: ['out', 'out', 'out', 'out'],   // スリーブごとの、置く軸（'out' = アウトプット軸、'counter' = カウンタ軸）
   detail: false,        // 段階5で、シンクロの拡大図を見ているか
   phase: 0,             // 拡大図での、スリーブを押し込む段階（0〜3）
@@ -39,6 +38,9 @@ const state = {
   clear: true,          // 拡大図のスリーブを透かす
   zoomDrum: false,
   colors: 'study',      // 配色: 'study'（学習用）か 'real'（実物に近い色）
+  clutchDetail: false,  // 段階9で、多板クラッチの拡大図を見ているか
+  clutchExplode: false, // 拡大図の板を、軸方向にばらして見せる
+  clutchClear: true,    // 拡大図のかごを透かす
   car3d: false,         // FR車の模型に載せて見る
   carZoom: false,       // 車に載せたまま、トランスミッションに近づいて見る
       // 段階6（ドラム式）で、ドラムまわりに近づいて見る
@@ -60,7 +62,7 @@ const state = {
   synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02, pitch: 0.045, chamfer: 60 },
   drum: { radius: 0.025, stroke: 0.008, ramp: 40, torque: 3, spring: 40, starRadius: 0.03, hill: 30 },
   lever: { knob: 0.21, gate: 0.03, stroke: 0.01, hand: 60 },
-  clutch: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
+  clutch: { type: 'multi', plates: 4, mu: 0.12, force: 3000, outer: 0.09, inner: 0.065 },   // 多板（湿式）を想定した仮の値
   car: { finalRatio: 4.1, tire: 0.63, mu: 1.0, load: 600 }
 };
 
@@ -103,8 +105,8 @@ function gearRatio(g) {
 // index番のギヤがつながったときの、全部の値
 function calc(index) {
   const c = {};
-  c.rpm = state.clutchOn ? state.rpm : 0;         // クラッチを切ると、インプット軸に回転が来ない
-  c.torque = state.clutchOn ? state.torque : 0;
+  c.rpm = state.rpm;
+  c.torque = state.torque;
   c.z1 = state.red.drive;
   c.z2 = state.red.driven;
   c.red = c.z2 / c.z1;
@@ -164,12 +166,20 @@ function leverCalc() {
   return { ratio, travel: l.stroke * ratio, force: l.hand * ratio };
 }
 
-// クラッチ: 摩擦面の平均半径と、伝えられる最大トルク（摩擦面は表と裏の2面）
+// クラッチの種類ごとの、説明用の仮の値（単板 = 乾式、多板 = オイルの中で使う湿式）
+const CLUTCH_PRESETS = {
+  single: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
+  multi: { mu: 0.12, force: 3000, outer: 0.09, inner: 0.065, plates: 4 }
+};
+
+// クラッチ: 摩擦面の平均半径、摩擦面の数、伝えられる最大トルク
+// 単板はディスクの表と裏の2面。多板は、摩擦板1枚につき表と裏の2面
 function clutch() {
   const k = state.clutch;
   const radius = 2 / 3 * (k.outer ** 3 - k.inner ** 3) / (k.outer ** 2 - k.inner ** 2);
-  const capacity = k.mu * k.force * radius * 2;
-  return { radius, capacity, margin: capacity / state.torque };
+  const surfaces = k.type === 'single' ? 2 : 2 * k.plates;
+  const capacity = k.mu * k.force * radius * surfaces;
+  return { radius, surfaces, capacity, margin: capacity / state.torque };
 }
 
 // タイヤ: 路面との摩擦で決まる、押せる力の上限 (N)
