@@ -156,7 +156,12 @@ function addSleeve(k, flow, counterAngle, outputAngle) {
   box.add(group);
   sliders.push({ group, k, home: sleeveZ(k) });
   put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, y, sleeveZ(k));
-  put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, y, 0, below ? counterAngle : outputAngle, group);
+  // スリーブ: 両端のつば（半径0.78）と、その間のフォーク溝（半径0.62）。フォークの爪は溝の中に入る
+  // 爪とスリーブの間にはすき間があり、スリーブが回っても爪は溝の中を滑るだけで、ぶつからない
+  const angle = below ? counterAngle : outputAngle;
+  [[0.78, 0.18, -0.21], [0.62, 0.24, 0], [0.78, 0.18, 0.21]].forEach(([radius, width, z]) => {
+    addMark(put(cylinder(radius, width), 'dark', 'sleeve:' + k, on, y, z, angle, group), radius, width);
+  });
 
   addFork(group, k, y, below ? -0.45 : 0);
 }
@@ -167,13 +172,13 @@ function addFork(group, k, sleeveY, forkX) {
   const part = 'fork:' + k;
   const shift = shiftType();
   const claw = new THREE.Shape();
-  claw.absarc(0, 0, 0.82, 0.2, Math.PI - 0.2, false);
-  claw.absarc(0, 0, 0.66, Math.PI - 0.2, 0.2, true);
+  claw.absarc(0, 0, 0.88, 0.2, Math.PI - 0.2, false);   // 外側はつばより大きく、外から見える
+  claw.absarc(0, 0, 0.67, Math.PI - 0.2, 0.2, true);    // 内側は溝の底（0.62）より少し大きい
   put(new THREE.ExtrudeGeometry(claw, { depth: 0.14, bevelEnabled: false }).translate(0, 0, -0.07), 'dark', part, false, sleeveY, 0, null, group);
 
   // 腕: 爪の上から、フォークシャフト（ドラム式）かシフトロッド（H型）の高さまで
   const top = shift === 'lever' ? RAIL_Y : FORK_Y;
-  const bottom = sleeveY + Math.sqrt(0.74 * 0.74 - forkX * forkX);
+  const bottom = sleeveY + Math.sqrt(0.8 * 0.8 - forkX * forkX);
   put(new THREE.BoxGeometry(0.16, top - bottom, 0.14), 'dark', part, false, (top + bottom) / 2, 0, null, group).position.x = forkX;
   if (shift === 'lever') return addRail(group, k, forkX);   // シフトロッドとゲート（hshift.js）
 
