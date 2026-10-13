@@ -158,18 +158,33 @@ function addSleeve(k, flow, counterAngle, outputAngle) {
   put(cylinder(0.45, 0.5), 'steel', 'sleeve:' + k, on, y, sleeveZ(k));
   put(gearGeometry(14, 0.62, 0.55), 'dark', 'sleeve:' + k, on, y, 0, below ? counterAngle : outputAngle, group);
 
-  // フォーク。カウンタ軸側のスリーブへは、アウトプット軸をよけて手前を通し、スリーブの横をつかむ
+  addFork(group, k, y, below ? -0.45 : 0);
+}
+
+// シフトフォーク。先の爪がスリーブの外周を上から囲み、腕が上の軸まで伸びる
+// forkX = 腕の左右の位置（カウンタ軸側のスリーブへは、アウトプット軸をよけて手前を通す）
+function addFork(group, k, sleeveY, forkX) {
+  const part = 'fork:' + k;
   const shift = shiftType();
-  const forkX = below ? -0.45 : 0;
-  const bottom = below ? -A : 0.65;
-  const top = { none: 2.15, drum: DRUM_Y + 0.2, lever: RAIL_Y }[shift];
-  put(new THREE.BoxGeometry(0.2, top - bottom, 0.16), 'dark', 'fork:' + k, false, (top + bottom) / 2, 0, null, group).position.x = forkX;
-  // ドラム式では、溝へはまる赤いピンを付ける。H型では、シフトロッドにつなぐ
+  const claw = new THREE.Shape();
+  claw.absarc(0, 0, 0.82, 0.2, Math.PI - 0.2, false);
+  claw.absarc(0, 0, 0.66, Math.PI - 0.2, 0.2, true);
+  put(new THREE.ExtrudeGeometry(claw, { depth: 0.14, bevelEnabled: false }).translate(0, 0, -0.07), 'dark', part, false, sleeveY, 0, null, group);
+
+  // 腕: 爪の上から、フォークシャフト（ドラム式）かシフトロッド（H型）の高さまで
+  const top = shift === 'lever' ? RAIL_Y : FORK_Y;
+  const bottom = sleeveY + Math.sqrt(0.74 * 0.74 - forkX * forkX);
+  put(new THREE.BoxGeometry(0.16, top - bottom, 0.14), 'dark', part, false, (top + bottom) / 2, 0, null, group).position.x = forkX;
+  if (shift === 'lever') return addRail(group, k, forkX);   // シフトロッドとゲート（hshift.js）
+
+  // ボス: フォークシャフトが通る筒。腕が手前にずれているときは、横のつなぎでボスまで渡す
+  put(new THREE.BoxGeometry(Math.abs(forkX) + 0.16, 0.14, 0.14), 'dark', part, false, FORK_Y, 0, null, group).position.x = forkX / 2;
+  put(cylinder(BOSS_R, 0.45), 'dark', part, false, FORK_Y, 0, null, group);
+  // ガイドピン: ボスの上に立ち、ドラムの溝にはまる
   if (shift === 'drum') {
-    const pin = new THREE.CylinderGeometry(0.09, 0.09, 0.45 - forkX).rotateZ(Math.PI / 2);
-    put(pin, 'key', 'fork:' + k, false, DRUM_Y, 0, null, group).position.x = forkX / 2;
+    const length = DRUM_Y - DRUM_R + 0.06 - (FORK_Y + BOSS_R);
+    put(new THREE.CylinderGeometry(0.08, 0.08, length), 'key', 'guidepin', false, FORK_Y + BOSS_R + length / 2, 0, null, group);
   }
-  if (shift === 'lever') addRail(group, k, forkX);   // シフトロッドとゲート（hshift.js）
 }
 
 // フライホイール、クラッチディスク、プレッシャープレート
@@ -215,7 +230,7 @@ function buildScene() {
   list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle, outputAngle));
   if (state.step >= STEP_SLEEVE) {
     for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, counterAngle, outputAngle);
-    if (shiftType() !== 'lever') put(cylinder(0.07, endZ - 0.5), 'dark', 'fork:0', false, 2.15, (endZ - 1.5) / 2);   // フォークが滑る棒
+    if (shiftType() !== 'lever') put(cylinder(0.1, endZ + 0.3), 'steel', 'forkshaft', false, FORK_Y, (endZ - 1.3) / 2);   // フォークシャフト（ケースに固定）
   }
   if (shiftType() === 'drum') buildDrum();     // シフトドラム（drum.js）
   if (shiftType() === 'lever') buildLever();   // シフトレバー（hshift.js）
@@ -225,6 +240,16 @@ function buildScene() {
 
 // 今の段階の部品が全部入るように、カメラを置き直す
 function frameCamera() {
+  if (state.zoomDrum) {
+    // ドラム、ガイドピン、フォークのボスが大きく見えるように、斜め前の少し下から見る
+    const [from, to] = drumSpan();
+    const middle = (from + to) / 2;
+    const half = Math.tan(camera.fov * Math.PI / 360);
+    const distance = Math.max((to - from + 1.5) / 2 / (half * camera.aspect), 2.2 / half) * 1.15;
+    controls.target.set(middle, DRUM_Y - 0.7, 0);
+    camera.position.set(middle + distance * 0.15, DRUM_Y + distance * 0.03, distance);
+    return;
+  }
   if (state.detail) {
     controls.target.set(-0.7, 0, 0);
     camera.position.set(1.6, 2.4, 8.5 / Math.min(1, camera.aspect));
@@ -235,8 +260,8 @@ function frameCamera() {
   if (state.step >= STEP_TIRE) to += 2.5;
   const half = Math.tan(camera.fov * Math.PI / 360);
   // ドラムやレバーがあると、図が上に高くなる
-  const height = { none: 3.4, drum: 4.4, lever: 5 }[shiftType()];
-  const centerY = { none: -A / 2, drum: -0.4, lever: 0.3 }[shiftType()];
+  const height = { none: 3.6, drum: 4.9, lever: 5 }[shiftType()];
+  const centerY = { none: -0.9, drum: 0.1, lever: 0.3 }[shiftType()];
   const distance = Math.max((to - from) / 2 / (half * camera.aspect), height / half) * 1.25;
   const middle = (from + to) / 2;
   controls.target.set(middle, centerY, 0);

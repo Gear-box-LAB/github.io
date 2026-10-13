@@ -37,6 +37,7 @@ const state = {
   phase: 0,             // 拡大図での、スリーブを押し込む段階（0〜3）
   explode: false,       // 拡大図の部品を、軸方向にばらして見せる
   clear: true,          // 拡大図のスリーブを透かす
+  zoomDrum: false,      // 段階6（ドラム式）で、ドラムまわりに近づいて見る
   rpm: 3000,            // エンジン回転数
   torque: 200,          // エンジントルク (N·m)
   red: { drive: 20, driven: 30 },   // インプット軸 → カウンタ軸の減速ギヤの歯数
@@ -52,7 +53,7 @@ const state = {
   ],
   // 以下は説明用の仮の値
   synchro: { force: 500, mu: 0.1, radius: 0.035, angle: 6.5, inertia: 0.02, pitch: 0.045, chamfer: 60 },
-  drum: { radius: 0.025, stroke: 0.008, ramp: 40, torque: 3 },
+  drum: { radius: 0.025, stroke: 0.008, ramp: 40, torque: 3, spring: 40, starRadius: 0.03, hill: 30 },
   lever: { knob: 0.21, gate: 0.03, stroke: 0.01, hand: 60 },
   clutch: { mu: 0.3, force: 5000, outer: 0.11, inner: 0.075 },
   car: { finalRatio: 4.1, tire: 0.63, mu: 1.0, load: 600 }
@@ -147,7 +148,8 @@ function synchro(i, c) {
 function drumCam() {
   const d = state.drum;
   const slope = d.stroke / (d.radius * d.ramp * Math.PI / 180);   // tan γ
-  return { slope, angle: Math.atan(slope) * 180 / Math.PI, force: d.torque / (d.radius * slope) };
+  const hold = d.spring * d.starRadius * Math.tan(d.hill * Math.PI / 180);   // ストッパーが段を保つトルク（くぼみの坂を越えるのに要る）
+  return { slope, angle: Math.atan(slope) * 180 / Math.PI, force: d.torque / (d.radius * slope), hold };
 }
 
 // シフトレバー: レバー比と、ノブの動く量、ロッドを押す力
