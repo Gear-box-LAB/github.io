@@ -37,7 +37,11 @@ const state = {
   phase: 0,             // 拡大図での、スリーブを押し込む段階（0〜3）
   explode: false,       // 拡大図の部品を、軸方向にばらして見せる
   clear: true,          // 拡大図のスリーブを透かす
-  zoomDrum: false,      // 段階6（ドラム式）で、ドラムまわりに近づいて見る
+  zoomDrum: false,
+  colors: 'study',      // 配色: 'study'（学習用）か 'real'（実物に近い色）
+  car3d: false,         // FR車の模型に載せて見る
+  carZoom: false,       // 車に載せたまま、トランスミッションに近づいて見る
+      // 段階6（ドラム式）で、ドラムまわりに近づいて見る
   rpm: 3000,            // エンジン回転数
   torque: 200,          // エンジントルク (N·m)
   red: { drive: 20, driven: 30 },   // インプット軸 → カウンタ軸の減速ギヤの歯数

@@ -17,7 +17,8 @@
 <main class="bench">
   <section class="stage" id="stageBox">
     <canvas id="stage" aria-label="ギヤボックスの3Dの図"></canvas>
-    <p class="hint">部品をクリックすると説明が開きます。ドラッグで向きを変え、ホイールで拡大できます。</p>
+    <p class="hint" id="hint"></p>
+    <div class="buttons view" id="viewButtons"></div>
 
     <aside class="bubble" id="bubble" hidden>
       <button type="button" class="close" id="bubbleClose">閉じる</button>
@@ -61,6 +62,7 @@
 <script src="synchro.js"></script>
 <script src="drum.js"></script>
 <script src="hshift.js"></script>
+<script src="car.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

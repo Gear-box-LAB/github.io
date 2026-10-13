@@ -337,6 +337,49 @@ function partInfo(part) {
       ]
     };
   }
+  if (part === 'car:engine') return {
+    title: 'エンジン（縦置き）',
+    text: 'FR車では、エンジンを前後方向に置き、後ろにクラッチとトランスミッションを一直線につなぎます。この模型は、エンジンを前輪より後ろに置いた形です。前のプーリーはエンジン回転数で回ります。',
+    rows: [['回転数', 'エンジン回転数', `${n0(state.rpm)} rpm`], ['トルク', 'エンジントルク', `${n0(state.torque)} N·m`]]
+  };
+  if (part === 'car:radiator') return {
+    title: 'ラジエーター',
+    text: 'エンジンを冷やす水を、走る風で冷やす部品です。車のいちばん前にあります。',
+    rows: [['トランスミッションとの関係', 'なし', '位置の目安として置いている']]
+  };
+  if (part === 'car:bell') return {
+    title: 'クラッチハウジング',
+    text: 'エンジンとトランスミッションの間にある、つり鐘形のケースです。中にクラッチ（段階9）が入っています。',
+    rows: [['伝えられる最大トルク', `${T_C} = μ × F × ${sub('R', 'm')} × 2`, `${n0(clutch().capacity)} N·m`]]
+  };
+  if (part === 'car:prop') return {
+    title: 'プロペラシャフト',
+    text: 'トランスミッションのアウトプット軸と、後ろのデフをつなぐ長い軸です。FR車は前のエンジンの力を後輪へ送るので、この軸が車の下を前後に通ります。アウトプット軸と同じ回転数で回ります。',
+    rows: [['回転数', `= ${N_OUT}`, `${n0(c.outRpm)} rpm`], ['トルク', `= ${T_OUT}`, `${n0(c.outTorque)} N·m`]]
+  };
+  if (part === 'car:diff') return {
+    title: 'デフ（最終減速ギヤとディファレンシャル）',
+    text: 'プロペラシャフトの回転を最終減速比でもう一度減速し、向きを90°変えて左右の後輪へ分けます。曲がるときは、左右の後輪の回転差を吸収します。',
+    rows: [['タイヤの回転数', `${N_OUT} / ${sub('i', 'f')}`, `${n0(c.outRpm)} ÷ ${n2(c.final)} = ${n0(c.tireRpm)} rpm`]]
+  };
+  if (part === 'car:axle' || part === 'car:wheel') return {
+    title: part === 'car:axle' ? 'ドライブシャフト' : 'タイヤ',
+    text: part === 'car:axle' ? 'デフから左右の後輪へ力を伝える軸です。タイヤと同じ回転数で回ります。' : '後輪がエンジンの力で回り、前輪は転がってついてきます。直径は、段階10の「タイヤ直径」の値です。',
+    rows: [
+      ['回転数', `${N_OUT} / ${sub('i', 'f')}`, `${n0(c.tireRpm)} rpm`],
+      ['車速', `v = 2π × r × タイヤの回転数 × 60 / 1000`, `${n1(c.speed)} km/h`]
+    ]
+  };
+  if (part === 'car:case') return {
+    title: 'トランスミッションケース',
+    text: 'トランスミッションの外側のケースです。中の部品が見えるように半透明にしています。',
+    rows: [['中身', 'このサイトの図', '今の段階の部品']]
+  };
+  if (part === 'car:seat') return {
+    title: '運転席と助手席',
+    text: '大きさの目安です。日本の車なので、ハンドルは右側にあります。',
+    rows: [['全長、全幅', '目安', '3.92 m、1.735 m']]
+  };
   if (part === 'idler') return {
     title: 'アイドラギヤ',
     text: 'リバースのときだけ使う、3枚目の歯車です。2枚のギヤの間に入り、回る向きを逆にします。',
@@ -478,8 +521,9 @@ function renderGearButtons() {
 function renderDetailButtons() {
   const toggle = (key, name) => `<button type="button" data-toggle="${key}" class="${state[key] ? 'current' : ''}">${name}</button>`;
   let html = '';
-  if (state.step === STEP_SYNCHRO && !state.detail) html = '<button type="button" data-toggle="detail">シンクロを拡大して見る</button>';
-  if (state.step === STEP_DRUM && shiftType() === 'drum') html = toggle('zoomDrum', 'ドラムまわりを拡大して見る');
+  if (state.car3d) html = toggle('carZoom', 'トランスミッションに近づく');   // 車に載せているときは、近づく切り替えだけ出す
+  else if (state.step === STEP_SYNCHRO && !state.detail) html = '<button type="button" data-toggle="detail">シンクロを拡大して見る</button>';
+  else if (state.step === STEP_DRUM && shiftType() === 'drum') html = toggle('zoomDrum', 'ドラムまわりを拡大して見る');
   if (state.detail) {
     html = PHASES.map((p, i) => `<button type="button" data-phase="${i}" class="${i === state.phase ? 'current' : ''}">${i + 1} ${p.name}</button>`).join('')
       + toggle('explode', '分解して見る') + toggle('clear', 'スリーブを透かす')
@@ -528,6 +572,18 @@ function renderLesson() {
   el('next').disabled = state.step === STEPS.length;
 }
 
+// 図の右上の切り替え（配色、車に載せる）と、左上の説明
+function renderViewButtons() {
+  const button = (key, value, name) =>
+    `<button type="button" data-view="${key}" data-value="${value}" class="${String(state[key]) === String(value) ? 'current' : ''}">${name}</button>`;
+  el('viewButtons').innerHTML = button('colors', 'study', '学習用の色') + button('colors', 'real', 'リアルな色')
+    + button('car3d', 'false', '部品だけ') + button('car3d', 'true', '車に載せる');
+  el('stageBox').classList.toggle('real', state.colors === 'real');
+  el('hint').textContent = state.car3d
+    ? 'FR車に載せた状態です（寸法は小型スポーツカーが目安）。部品をクリックすると説明が開きます。'
+    : '部品をクリックすると説明が開きます。ドラッグで向きを変え、ホイールで拡大できます。';
+}
+
 function renderBubble() {
   el('bubble').hidden = state.picked === null;
   if (state.picked === null) return;
@@ -540,6 +596,7 @@ function update() {
   renderSteps();
   renderGearButtons();
   renderDetailButtons();
+  renderViewButtons();
   renderLesson();
   renderBubble();
   buildScene();
@@ -605,11 +662,27 @@ el('detailButtons').addEventListener('click', e => {
   const d = e.target.dataset;
   if (d.phase) state.phase = Number(d.phase);
   if (d.toggle) state[d.toggle] = !state[d.toggle];
-  if (d.toggle === 'zoomDrum') frameCamera();
+  if (d.toggle === 'zoomDrum' || d.toggle === 'carZoom') frameCamera();
   if (d.toggle === 'detail') {
     // 拡大図に入るときと出るときは、最初の状態に戻して、カメラを置き直す
     state.phase = 0;
     state.gear = NEUTRAL;
+    state.picked = null;
+    update();
+    frameCamera();
+    return;
+  }
+  update();
+});
+el('viewButtons').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (!d.view) return;
+  state[d.view] = d.view === 'car3d' ? d.value === 'true' : d.value;
+  if (d.view === 'car3d') {
+    // 車に載せるときは、拡大図をやめて、カメラを置き直す
+    state.detail = false;
+    state.zoomDrum = false;
+    state.carZoom = false;
     state.picked = null;
     update();
     frameCamera();

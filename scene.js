@@ -7,22 +7,36 @@ const GROUP = 3.2;      // スリーブ同士の間隔
 const RED_Z = -1.9;     // 減速ギヤの位置
 const SLIDE = 0.35;     // スリーブが動く量
 const SLOW = 1 / 40;    // 目で追えるように、回転を1/40の速さで見せる
-const COLOR = {
-  stage: 0x17303a, steel: 0x9fb0b8, free: 0xeef2f3, power: 0xf0a81c, dark: 0x4a606b,
-  brass: 0xc9a24a, key: 0xd9534f, groove: 0x14232b, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff
+// 配色。study = 学習用（空転ギヤは白、力の通り道は橙）、real = 実物に近い色（鋼、アルミ、真ちゅう、ゴム）
+// metal と rough は、金属らしさ（光の反射）とざらつき
+const PALETTES = {
+  study: {
+    stage: 0x17303a, steel: 0x9fb0b8, free: 0xeef2f3, power: 0xf0a81c, dark: 0x4a606b, brass: 0xc9a24a,
+    key: 0xd9534f, groove: 0x14232b, disc: 0x9a6248, rubber: 0x55656e, pick: 0x4da3ff,
+    case: 0xb7c3c8, body: 0xdfe6e9, seat: 0x4a606b, edge: 0xdfe6e9, mark: 0xd40000, metal: 0.3, rough: 0.55
+  },
+  real: {
+    stage: 0xc8ccd0, steel: 0xa3a9af, free: 0xadb3b9, power: 0xa3a9af, dark: 0x50575e, brass: 0xb5925a,
+    key: 0x34383c, groove: 0x2a2e33, disc: 0x5e4a3a, rubber: 0x1d1f22, pick: 0x4da3ff,
+    case: 0xb9bec3, body: 0x9fb0c0, seat: 0x2b2d30, edge: 0x3a4148, mark: 0xd40000, metal: 0.4, rough: 0.35
+  }
 };
+const palette = () => PALETTES[state.colors];
 
 const canvas = el('stage');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const world = new THREE.Scene();
-world.background = new THREE.Color(COLOR.stage);
-const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 200);
+world.background = new THREE.Color(palette().stage);
+const camera = new THREE.PerspectiveCamera(35, 1, 0.02, 200);
 const controls = new THREE.OrbitControls(camera, canvas);
 world.add(new THREE.HemisphereLight(0xffffff, 0x1b2b33, 0.95));
 const sun = new THREE.DirectionalLight(0xffffff, 0.6);
 sun.position.set(4, 8, 10);
 world.add(sun);
+const backLight = new THREE.DirectionalLight(0xffffff, 0.35);   // 反対側からの弱い光（金属の面が真っ黒にならないように）
+backLight.position.set(-6, 3, -8);
+world.add(backLight);
 const box = new THREE.Group();
 box.rotation.y = Math.PI / 2;
 world.add(box);
@@ -88,8 +102,8 @@ function meshAngle(angleA, teethA, teethB, beta) {
 // kind = 色の名前、on = 力が通っている（橙色）。クリックした部品は青。angle = 回る部品の角度を返す関数
 function put(geometry, kind, part, on, y, z, angle, parent) {
   const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-    color: part === state.picked ? COLOR.pick : on ? COLOR.power : COLOR[kind],
-    metalness: 0.3, roughness: 0.55, flatShading: true
+    color: part === state.picked ? palette().pick : on ? palette().power : palette()[kind],
+    metalness: palette().metal, roughness: palette().rough, flatShading: true
   }));
   mesh.position.set(0, y, z);
   mesh.userData.part = part;
@@ -100,7 +114,8 @@ function put(geometry, kind, part, on, y, z, angle, parent) {
 
 // 回っているのが見えるように、円柱の0°の位置に赤い線を1本引く
 function addMark(mesh, radius, length) {
-  const line = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, length), new THREE.MeshBasicMaterial({ color: 0xd40000 }));
+  // 線の太さは、細い軸（車のプロペラシャフトなど）でもはみ出さないように、半径に合わせて小さくする
+  const line = new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.1, radius * 0.6), Math.min(0.04, radius * 0.25), length), new THREE.MeshBasicMaterial({ color: palette().mark }));
   line.position.y = radius;
   line.userData.part = mesh.userData.part;
   mesh.add(line);
@@ -213,8 +228,12 @@ function addTire(z, on) {
 // ---------- 図を作り直す ----------
 function buildScene() {
   box.children.slice().forEach(child => box.remove(child));
+  if (carGroup) world.remove(carGroup);
   spinners = [];
   sliders = [];
+  world.background.set(palette().stage);
+  placeBox();                                 // 車に載せるときは縮小して置く（car.js）
+  if (state.car3d) buildCar();
   if (state.detail) return buildSynchro();   // シンクロの拡大図（synchro.js）
 
   const c = calc(state.gear);
@@ -240,11 +259,19 @@ function buildScene() {
   if (shiftType() === 'drum') buildDrum();     // シフトドラム（drum.js）
   if (shiftType() === 'lever') buildLever();   // シフトレバー（hshift.js）
   if (state.step >= STEP_CLUTCH) addClutch(flow);
-  if (state.step >= STEP_TIRE) addTire(endZ + 0.5, flow);
+  if (state.step >= STEP_TIRE && !state.car3d) addTire(endZ + 0.5, flow);   // 車に載せたときは、車のタイヤを使う
 }
 
 // 今の段階の部品が全部入るように、カメラを置き直す
 function frameCamera() {
+  if (state.car3d) {
+    // 車の左斜め前の上から、車全体が入るように見る。carZoom のときは、トランスミッションに近づく
+    const distance = (state.carZoom ? 1.5 : 5.6) / Math.min(1, camera.aspect);
+    const target = state.carZoom ? -0.1 : -0.2;
+    controls.target.set(target, state.carZoom ? CAR.driveY : 0.45, 0);
+    camera.position.set(target - distance * 0.45, controls.target.y + distance * 0.4, distance * 0.8);
+    return;
+  }
   if (state.zoomDrum) {
     // ドラム、ガイドピン、フォークのボスが大きく見えるように、斜め前の少し下から見る
     const [from, to] = drumSpan();
@@ -319,7 +346,8 @@ canvas.addEventListener('click', e => {
   const r = canvas.getBoundingClientRect();
   const point = new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   ray.setFromCamera(point, camera);
-  const hit = ray.intersectObjects(box.children, true)[0];
+  // 車体やケースのような半透明の部品は飛ばして、その奥の部品を選ぶ
+  const hit = ray.intersectObjects(world.children, true).find(h => h.object.userData.part && !h.object.userData.ghost);
   pick(hit ? hit.object.userData.part : null, e.clientX - r.left, e.clientY - r.top);   // pick は app.js
 });
 
