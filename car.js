@@ -100,15 +100,32 @@ function buildCar() {
   ghost(carPart(new THREE.BoxGeometry(end - CAR.boxStart, 0.32, 0.3), 'case', 'car:case', (CAR.boxStart + end) / 2, y - 0.02, 0), 0.18);
   ghost(carPart(cylinderX(0.06, 0.18), 'case', 'car:case', end + 0.09, y, 0), 0.3);
 
-  // プロペラシャフト（アウトプット軸と同じ回転数）、デフ、ドライブシャフト、タイヤ
-  const diffFront = CAR.rearAxle - 0.14;
-  const propLength = Math.hypot(diffFront - end - 0.18, y - tireR);
-  const prop = carPart(cylinderX(0.035, propLength), 'steel', 'car:prop', (end + 0.18 + diffFront) / 2, (y + tireR) / 2, 0, () => spin.output, 'x');
-  prop.rotation.order = 'ZYX';
-  addMark(prop, 0.035, propLength);
-  carPart(new THREE.SphereGeometry(0.13, 20, 14), 'case', 'car:diff', CAR.rearAxle, tireR, 0);
+  // アウトプット軸からタイヤまで、1本につながった動力の通り道
+  // アウトプット軸の延長 → 自在継手 → プロペラシャフト → 自在継手 → ピニオン → リングギヤ → ドライブシャフト → タイヤ
+  const out = () => spin.output;       // アウトプット軸と同じ回転
+  const wheel = () => spin.tire;       // タイヤと同じ回転（アウトプット軸 ÷ 最終減速比）
+  const ringR = 0.11;                  // リングギヤの半径
+  const ringZ = 0.05;                  // リングギヤの位置（左右）
+  const pinionX = CAR.rearAxle - ringR * 0.8;    // ピニオンがリングギヤにかみ合う位置
+  const pinionR = ringR * 0.8 / state.car.finalRatio;   // 半径の比 = 最終減速比 にして、回る速さを合わせる
+  const jointA = end + 0.2;            // 前の自在継手（エクステンションの後ろ）
+  const jointB = pinionX - 0.16;       // 後ろの自在継手（デフの前）
+
+  addMark(carPart(cylinderX(0.025, jointA - end), 'steel', 'car:prop', (end + jointA) / 2, y, 0, out, 'x'), 0.025, jointA - end);
+  [jointA, jointB].forEach(x => carPart(new THREE.BoxGeometry(0.05, 0.07, 0.07), 'dark', 'car:joint', x, (y + tireR) / 2, 0, out, 'x'));
+  addMark(carPart(cylinderX(0.035, jointB - jointA), 'steel', 'car:prop', (jointA + jointB) / 2, (y + tireR) / 2, 0, out, 'x'), 0.035, jointB - jointA);
+  carPart(cylinderX(0.02, pinionX - jointB), 'steel', 'car:pinion', (jointB + pinionX) / 2, tireR, 0, out, 'x');
+
+  // デフ: ケースは半透明。中のピニオン（軸は前後）が、リングギヤ（軸は左右）の面を回す
+  ghost(carPart(new THREE.SphereGeometry(0.17, 24, 16), 'case', 'car:diff', CAR.rearAxle, tireR, 0), 0.2);
+  const pinion = carPart(gearGeometry(10, pinionR, 0.04).rotateY(Math.PI / 2), 'brass', 'car:pinion', pinionX, tireR, ringZ - 0.03 - pinionR, out, 'x');
+  pinion.userData.part = 'car:pinion';
+  carPart(gearGeometry(Math.round(10 * state.car.finalRatio), ringR, 0.03), 'brass', 'car:ring', CAR.rearAxle, tireR, ringZ, wheel);
+
+  // ドライブシャフトとタイヤ（後輪はリングギヤと同じ回転。前輪は転がってついてくるので同じ回転）
   [-1, 1].forEach(side => {
-    addMark(carPart(cylinder(0.025, CAR.track / 2 - 0.2), 'steel', 'car:axle', CAR.rearAxle, tireR, side * (CAR.track / 4 + 0.05), () => spin.tire), 0.025, CAR.track / 2 - 0.2);
+    const length = CAR.track / 2 - 0.1;
+    addMark(carPart(cylinder(0.025, length), 'steel', 'car:axle', CAR.rearAxle, tireR, side * length / 2, wheel), 0.025, length);
     addWheel(CAR.rearAxle, side * CAR.track / 2, tireR);
     addWheel(CAR.frontAxle, side * CAR.track / 2, tireR);
   });

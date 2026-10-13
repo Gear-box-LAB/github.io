@@ -357,6 +357,19 @@ function partInfo(part) {
     text: 'トランスミッションのアウトプット軸と、後ろのデフをつなぐ長い軸です。FR車は前のエンジンの力を後輪へ送るので、この軸が車の下を前後に通ります。アウトプット軸と同じ回転数で回ります。',
     rows: [['回転数', `= ${N_OUT}`, `${n0(c.outRpm)} rpm`], ['トルク', `= ${T_OUT}`, `${n0(c.outTorque)} N·m`]]
   };
+  if (part === 'car:joint') return {
+    title: '自在継手（ユニバーサルジョイント）',
+    text: 'プロペラシャフトの前と後ろにある継手です。トランスミッションとデフの高さや角度が少し違っても、回転を伝えられます。車が上下に揺れて角度が変わっても、回し続けられます。',
+    rows: [['回転数', `= ${N_OUT}`, `${n0(c.outRpm)} rpm`]]
+  };
+  if (part === 'car:pinion' || part === 'car:ring') return {
+    title: part === 'car:pinion' ? 'ドライブピニオン' : 'リングギヤ',
+    text: 'デフの中の、最終減速ギヤの組です。プロペラシャフトにつながる小さいピニオン（前後の軸）が、大きいリングギヤ（左右の軸）を回します。軸の向きが90°変わり、回転は最終減速比だけ遅くなります。実物はかさ歯車（ハイポイドギヤ）で、図は簡略化しています。',
+    rows: [
+      ['最終減速比', `${sub('i', 'f')} = リングギヤの歯数 / ピニオンの歯数`, `${Math.round(10 * state.car.finalRatio)} ÷ 10 = ${n2(c.final)}`],
+      ['リングギヤの回転数', `${N_OUT} / ${sub('i', 'f')}`, `${n0(c.outRpm)} ÷ ${n2(c.final)} = ${n0(c.tireRpm)} rpm`]
+    ]
+  };
   if (part === 'car:diff') return {
     title: 'デフ（最終減速ギヤとディファレンシャル）',
     text: 'プロペラシャフトの回転を最終減速比でもう一度減速し、向きを90°変えて左右の後輪へ分けます。曲がるときは、左右の後輪の回転差を吸収します。',
@@ -521,7 +534,7 @@ function renderGearButtons() {
 function renderDetailButtons() {
   const toggle = (key, name) => `<button type="button" data-toggle="${key}" class="${state[key] ? 'current' : ''}">${name}</button>`;
   let html = '';
-  if (state.car3d) html = toggle('carZoom', 'トランスミッションに近づく');   // 車に載せているときは、近づく切り替えだけ出す
+  if (state.car3d) html = toggle('carZoom', '動力の通り道に近づく');   // 車に載せているときは、近づく切り替えだけ出す
   else if (state.step === STEP_SYNCHRO && !state.detail) html = '<button type="button" data-toggle="detail">シンクロを拡大して見る</button>';
   else if (state.step === STEP_DRUM && shiftType() === 'drum') html = toggle('zoomDrum', 'ドラムまわりを拡大して見る');
   if (state.detail) {
@@ -580,7 +593,7 @@ function renderViewButtons() {
     + button('car3d', 'false', '部品だけ') + button('car3d', 'true', '車に載せる');
   el('stageBox').classList.toggle('real', state.colors === 'real');
   el('hint').textContent = state.car3d
-    ? 'FR車に載せた状態です（寸法は小型スポーツカーが目安）。部品をクリックすると説明が開きます。'
+    ? 'FR車に載せた状態です（寸法は小型スポーツカーが目安）。アウトプット軸 → プロペラシャフト → デフ → タイヤ と回ります。部品をクリックすると説明が開きます。'
     : '部品をクリックすると説明が開きます。ドラッグで向きを変え、ホイールで拡大できます。';
 }
 
@@ -693,6 +706,7 @@ el('viewButtons').addEventListener('click', e => {
 el('bubbleClose').addEventListener('click', () => pick(null));
 
 el('rpm').addEventListener('input', e => { state.rpm = Math.max(0, Number(e.target.value) || 0); update(); });
+el('slow').addEventListener('change', e => { state.slow = Number(e.target.value); });
 el('torque').addEventListener('input', e => { state.torque = positive(e.target.value); update(); });
 
 // 説明パネルの入力欄（数値の欄と、段階7のギヤの表）

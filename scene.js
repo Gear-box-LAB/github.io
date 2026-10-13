@@ -6,7 +6,6 @@ const PAIR = 1.7;       // 1個のスリーブが受け持つ2枚のギヤの間
 const GROUP = 3.2;      // スリーブ同士の間隔
 const RED_Z = -1.9;     // 減速ギヤの位置
 const SLIDE = 0.35;     // スリーブが動く量
-const SLOW = 1 / 40;    // 目で追えるように、回転を1/40の速さで見せる
 // 配色。study = 学習用（空転ギヤは白、力の通り道は橙）、real = 実物に近い色（鋼、アルミ、真ちゅう、ゴム）
 // metal と rough は、金属らしさ（光の反射）とざらつき
 const PALETTES = {
@@ -265,11 +264,17 @@ function buildScene() {
 // 今の段階の部品が全部入るように、カメラを置き直す
 function frameCamera() {
   if (state.car3d) {
-    // 車の左斜め前の上から、車全体が入るように見る。carZoom のときは、トランスミッションに近づく
-    const distance = (state.carZoom ? 1.5 : 5.6) / Math.min(1, camera.aspect);
-    const target = state.carZoom ? -0.1 : -0.2;
-    controls.target.set(target, state.carZoom ? CAR.driveY : 0.45, 0);
-    camera.position.set(target - distance * 0.45, controls.target.y + distance * 0.4, distance * 0.8);
+    // 車の左斜め前の上から、車全体が入るように見る
+    // carZoom のときは、トランスミッションからデフまで（動力の通り道）が入るように近づく
+    if (state.carZoom) {
+      const near = 2 / Math.min(1, camera.aspect);
+      controls.target.set(0.3, CAR.driveY, 0);
+      camera.position.set(0.15, CAR.driveY + near * 0.35, near);
+      return;
+    }
+    const distance = 5.6 / Math.min(1, camera.aspect);
+    controls.target.set(-0.2, 0.45, 0);
+    camera.position.set(-0.2 - distance * 0.45, 0.45 + distance * 0.4, distance * 0.8);
     return;
   }
   if (state.zoomDrum) {
@@ -306,7 +311,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
   const c = calc(state.gear);
-  const perRpm = 2 * Math.PI / 60 * SLOW * dt;   // 1rpmあたり、このフレームで進む角度
+  const perRpm = 2 * Math.PI / 60 / state.slow * dt;   // 1rpmあたり、このフレームで進む角度（目で追えるように、1/slow の速さで見せる）
   spin.engine += state.rpm * perRpm;
   spin.input += c.rpm * perRpm;
   spin.output += c.outRpm * perRpm;
