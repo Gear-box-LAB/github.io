@@ -14,6 +14,15 @@ const CAR = {
 };
 
 let carGroup = null;
+let carGround = null;     // 地面のマス
+
+// 毎フレーム: 地面を、タイヤが転がった距離だけ後ろへ動かす（車は止まっていて、地面が動いて見える）
+// タイヤの回転と同じ速さ（1/slow の速さ）で動かすので、タイヤは地面に対して滑らずに転がって見える
+// マスは 1 m ごとに同じ模様なので、1 m 動いたら元の位置に戻しても見た目は変わらない
+function moveGround() {
+  const distance = spin.tire * state.car.tire / 2;   // タイヤが転がった距離 (m)。前進でプラス
+  carGround.position.x = ((distance % 1) + 1) % 1;   // 車の前は x のマイナス側なので、地面はプラス側へ動く
+}
 
 // x 方向（車の前後）に伸びる円柱
 const cylinderX = (radius, length, sides) => new THREE.CylinderGeometry(radius, radius, length, sides || 24).rotateZ(Math.PI / 2);
@@ -70,8 +79,9 @@ function buildCar() {
   const tireR = state.car.tire / 2;
   const y = CAR.driveY;
 
-  // 地面の目盛り（0.5 m ごと）と、車体
-  carGroup.add(new THREE.GridHelper(8, 16, 0x7d8b93, 0x55656e));
+  // 地面のマス（1 m × 1 m の正方形、20 m 四方）と、車体
+  carGround = new THREE.GridHelper(20, 20, 0x7d8b93, 0x7d8b93);
+  carGroup.add(carGround);
   const body = carPart(bodyGeometry(tireR), 'body', 'car:body', 0, 0, 0);
   ghost(body, 0.12);
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry, 25), new THREE.LineBasicMaterial({ color: palette().edge, transparent: true, opacity: 0.6 }));

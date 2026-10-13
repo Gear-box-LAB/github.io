@@ -342,6 +342,7 @@ function frame(now) {
     s.group.position.z = s.home + sleeveNow[s.k] * SLIDE;
   });
   if (state.detail) moveSynchro(dt);
+  if (state.car3d && carGround) moveGround();   // 車に載せているときは、地面を動かす（car.js）
   controls.update();
   renderer.render(world, camera);
   requestAnimationFrame(frame);
