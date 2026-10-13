@@ -136,12 +136,17 @@ function carInertia(c) {
 }
 
 // インプット軸側を止めようとするトルク（大きさ）。軸受けの抵抗と、段に入っていれば走行抵抗
+// 走行抵抗 (N): 転がり抵抗 + 空気抵抗。止まっていれば 0
+function roadForce(c) {
+  if (Math.abs(sim.output) < 1) return 0;
+  const v = Math.abs(sim.output) / c.final * RPM * c.radius;   // 車速 (m/s)
+  return ROAD.rolling * CAR_MASS * 9.81 + 0.5 * ROAD.air * ROAD.airCdA * v * v;
+}
+
 function inputLoad(c) {
   const bearing = BEARING.fixed + BEARING.perRad * Math.abs(sim.input) * RPM;
-  if (!c.engaged || Math.abs(sim.output) < 1) return bearing;
-  const v = Math.abs(sim.output) / c.final * RPM * c.radius;   // 車速 (m/s)
-  const force = ROAD.rolling * CAR_MASS * 9.81 + 0.5 * ROAD.air * ROAD.airCdA * v * v;
-  return bearing + force * c.radius / Math.abs(c.total * c.final);
+  if (!c.engaged) return bearing;
+  return bearing + roadForce(c) * c.radius / Math.abs(c.total * c.final);
 }
 
 // value を、0 をまたがない範囲で amount だけ 0 に近づける（抵抗で止まるときに、逆に回り出さないように）
@@ -180,7 +185,13 @@ function stepSim(dt) {
     sim.input = towardZero(sim.input, load / jIn * dt / RPM);
   }
   if (c.engaged) sim.output = sim.input / c.total;   // 段に入っていれば、アウトプット軸と車はインプット軸と一緒に動く
-  else sim.output = towardZero(sim.output, 0.3 * dt / RPM);   // ニュートラルでは、車は惰性で走り、少しずつ遅くなる（簡略）
+  else {
+    // ニュートラル: アウトプット軸はタイヤと常につながっているので、惰性で走る車に回される。
+    // 走行抵抗で車が遅くなるぶん、アウトプット軸も遅くなる（車の減速度 = 走行抵抗 ÷ 質量 を、アウトプット軸の回転に直す）
+    const c0 = calc(0);
+    const slowDown = roadForce(c0) * c0.final / (CAR_MASS * c0.radius);   // アウトプット軸の角減速度 (rad/s²)
+    sim.output = towardZero(sim.output, slowDown * dt / RPM);
+  }
   sim.transmitting = capacity > 0 && Math.abs(sim.torque) > 1;
   if (!sim.stalled && sim.engine < 400) {
     sim.stalled = true;
