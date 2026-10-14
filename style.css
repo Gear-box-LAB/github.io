@@ -73,11 +73,27 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .stage.real { --hint: #3a4148; }   /* 実物の色のときは背景が明るいので、説明の文字を濃くする */
 .stage { position: relative; display: flex; flex-direction: column; background: var(--stage); min-width: 0; min-height: 0; overflow: hidden; }
 /* 図（canvas）の下に操作の帯を置き、帯が図に重ならないようにする */
-.stage canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; }
+#stage { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; }
 .hint { position: absolute; top: 10px; left: var(--space); max-width: 50%; color: var(--hint); font-size: 13px; pointer-events: none; }
 /* 右上: 配色と、車に載せるかの切り替え */
 .view { position: absolute; top: 8px; right: var(--space); justify-content: flex-end; max-width: 48%; }
 .view button { font-size: 12px; padding: 3px 8px; }
+
+/* アウトプット軸のグラフ: PCでは図の右上に、図のおよそ4分の1（幅半分 × 高さ半分）。背景は薄く透かす */
+.graph {
+  position: absolute; top: 84px; right: var(--space); z-index: 1;   /* 右上の切り替えボタン（2段）の下に置く */
+  width: 48%; height: 48%; min-height: 220px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+  background: rgba(20, 35, 43, 0.45);
+  border: 1px solid rgba(223, 230, 233, 0.3);
+  border-radius: 4px;
+  color: #dfe6e9; font-size: 12px;
+}
+.graph canvas { flex: 1; min-height: 0; width: 100%; }
+.graphHead { display: flex; align-items: center; gap: 10px; }
+.graphHead button { margin-left: auto; }
+.graph button { font-size: 12px; padding: 2px 8px; }
 .bar {
   display: flex; flex-wrap: wrap; gap: 8px var(--space); align-items: center;
   padding: 10px var(--space);
@@ -150,9 +166,10 @@ select { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   .steps { flex-wrap: nowrap; overflow-x: auto; }
   .bench { grid-template-columns: 1fr; }
   .stage { height: auto; }
-  .stage canvas { flex: none; height: 55vh; }   /* 帯の高さに関係なく、図の高さを保つ */
+  #stage { flex: none; height: 55vh; }   /* 帯の高さに関係なく、図の高さを保つ */
   .bar { padding: 6px 8px; gap: 6px 10px; }
   .bar input { width: 64px; }
   .panel { border-left: 0; }
+  .graph { top: 150px; left: 8px; right: 8px; width: auto; height: calc(55vh - 160px); min-height: 0; }   /* スマホは図に重なってもよい。下の操作の帯には重ねない */
   .bubble { left: 8px !important; top: 8px !important; width: auto; right: 8px; }
 }

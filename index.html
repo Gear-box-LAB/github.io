@@ -20,6 +20,20 @@
     <p class="hint" id="hint"></p>
     <div class="buttons view" id="viewButtons"></div>
 
+    <aside class="graph" id="graphBox" hidden aria-label="アウトプット軸の回転数のグラフ">
+      <div class="graphHead">
+        <b>アウトプット軸の回転数 (rpm)</b>
+        <span id="graphNow"></span>
+        <button type="button" id="graphClose">閉じる</button>
+      </div>
+      <canvas id="graphCanvas"></canvas>
+      <div class="buttons">
+        <button type="button" id="graphStart">計測開始</button>
+        <button type="button" id="graphStop">中止</button>
+        <button type="button" id="graphReset">リセット</button>
+      </div>
+    </aside>
+
     <aside class="bubble" id="bubble" hidden>
       <button type="button" class="close" id="bubbleClose">閉じる</button>
       <h3 id="bubbleTitle"></h3>
@@ -68,6 +82,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="calc.js"></script>
+<script src="graph.js"></script>   <!-- 3Dの図より先に読む（図の毎フレームから呼ぶため） -->
 <script src="scene.js"></script>
 <script src="synchro.js"></script>
 <script src="drum.js"></script>

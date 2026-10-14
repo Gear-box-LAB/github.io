@@ -343,6 +343,7 @@ function frame(now) {
   });
   if (state.detail) moveSynchro(dt);
   if (state.car3d && carGround) moveGround();   // 車に載せているときは、地面を動かす（car.js）
+  stepGraph(dt);   // アウトプット軸のグラフ（graph.js）
   controls.update();
   renderer.render(world, camera);
   requestAnimationFrame(frame);

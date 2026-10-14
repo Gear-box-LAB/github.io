@@ -631,7 +631,9 @@ function renderViewButtons() {
   const button = (key, value, name) =>
     `<button type="button" data-view="${key}" data-value="${value}" class="${String(state[key]) === String(value) ? 'current' : ''}">${name}</button>`;
   el('viewButtons').innerHTML = button('colors', 'study', '学習用の色') + button('colors', 'real', 'リアルな色')
-    + button('car3d', 'false', '部品だけ') + button('car3d', 'true', '車に載せる');
+    + button('car3d', 'false', '部品だけ') + button('car3d', 'true', '車に載せる')
+    + `<button type="button" data-view="graph" class="${graph.open ? 'current' : ''}">${graph.open ? 'グラフを閉じる' : 'グラフを開く'}</button>`;
+  renderGraphButtons();
   el('stageBox').classList.toggle('real', state.colors === 'real');
   el('hint').textContent = state.car3d
     ? 'FR車に載せた状態です（寸法は小型スポーツカーが目安、地面のマスは1 m）。車速に合わせて地面が動きます。アウトプット軸 → プロペラシャフト → デフ → タイヤ と回ります。部品をクリックすると説明が開きます。'
@@ -781,6 +783,11 @@ el('detailButtons').addEventListener('click', e => {
 el('viewButtons').addEventListener('click', e => {
   const d = e.target.dataset;
   if (!d.view) return;
+  if (d.view === 'graph') {
+    graph.open = !graph.open;
+    renderViewButtons();
+    return;
+  }
   state[d.view] = d.view === 'car3d' ? d.value === 'true' : d.value;
   if (d.view === 'car3d') {
     // 車に載せるときは、拡大図をやめて、カメラを置き直す
