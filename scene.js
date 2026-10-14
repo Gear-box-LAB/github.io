@@ -325,7 +325,7 @@ function frame(now) {
     if (pack) movePack(dt);
     showSim(dt);   // 図の下の表示（app.js）
   } else {
-    spin.engine += state.rpm * perRpm;
+    spin.engine += c.rpm * perRpm;
     spin.input += c.rpm * perRpm;
     spin.output += c.outRpm * perRpm;
     spin.tire += c.tireRpm * perRpm;

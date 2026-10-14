@@ -149,11 +149,28 @@ function inputLoad(c) {
   return bearing + roadForce(c) * c.radius / Math.abs(c.total * c.final);
 }
 
+// 運転者（AMTでは制御）がアクセルで目指すエンジン回転数
+//   エンジン回転数を入力にしたとき: その値
+//   車速を入力にしたとき: 段に入ってクラッチがつながっていれば、目標の車速に必要な回転数。
+//   半クラッチ中で目標より遅ければ、発進用の 2000 rpm。それ以外はアイドリング
+const LAUNCH_RPM = 2000;
+function engineTarget(c) {
+  if (state.input !== 'speed') return state.rpm;
+  if (!c.engaged) return IDLE_RPM;
+  if (sim.slipping || engage() < 1) return carSpeed() < state.speed ? LAUNCH_RPM : IDLE_RPM;
+  // 走行抵抗に勝つぶんのアクセルを足す（アクセルの効き 0.5 N·m/rpm で割って、回転数の上乗せに直す）
+  return Math.min(REV_LIMIT, Math.max(IDLE_RPM, speedRpm(state.gear) + inputLoad(c) / 0.5));
+}
+
+// 今の車速 (km/h)
+const carSpeed = () => sim.output / state.car.finalRatio * Math.PI * state.car.tire * 60 / 1000;
+
 // value を、0 をまたがない範囲で amount だけ 0 に近づける（抵抗で止まるときに、逆に回り出さないように）
 const towardZero = (value, amount) => Math.sign(value) * Math.max(0, Math.abs(value) - amount);
 
 function resetSim() {
-  Object.assign(sim, { pedal: 0, engine: state.rpm, input: state.rpm, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' });
+  const start = state.input === 'speed' ? IDLE_RPM : state.rpm;
+  Object.assign(sim, { pedal: 0, engine: start, input: start, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' });
   Object.assign(amt, { phase: 'idle', drive: false, launch: false });
   el('pedal').value = 0;
 }
@@ -163,7 +180,7 @@ function stepSim(dt) {
   const c = calc(state.gear);
   const jIn = J_INPUT + carInertia(c);
   const load = inputLoad(c);
-  const engineTorque = sim.stalled ? 0 : Math.max(-20, Math.min(state.torque, 0.5 * (state.rpm - sim.engine)));
+  const engineTorque = sim.stalled ? 0 : Math.max(-20, Math.min(state.torque, 0.5 * (engineTarget(c) - sim.engine)));
   const capacity = engage() * clutch().capacity;
   const slip = sim.engine - sim.input;
 
@@ -220,6 +237,15 @@ function shiftWithClutch(gear) {
 
 const amt = { phase: 'idle', timer: 0, target: NEUTRAL, drive: false, launch: false };
 
+// 1段上げるか
+//   エンジン回転数を入力にしたとき: エンジン回転数が目標に近づいたら
+//   車速を入力にしたとき: 2800 rpm を超えたか、目標の車速に近づいたら。ただし上げた後が 1500 rpm を下回るなら上げない
+function wantUpshift(next) {
+  if (state.input !== 'speed') return sim.engine > state.rpm - 150;
+  const after = Math.abs(sim.output * calc(next).total);
+  return after > 1500 && (sim.engine > 2800 || carSpeed() > state.speed - 3);
+}
+
 function requestShift(gear) {
   if (gear === state.gear || amt.phase !== 'idle') return;
   // 変えた後にエンジンが回りすぎる段には、変えない（エンジンを守る）
@@ -251,7 +277,7 @@ function stepAmt(dt) {
     const forward = drumOrder().filter(g => g !== NEUTRAL && !state.gears[g].reverse);
     const now = forward.indexOf(state.gear);
     if (now < 0) requestShift(forward[0]);
-    else if (sim.engine > state.rpm - 150 && now < forward.length - 1) requestShift(forward[now + 1]);
+    else if (now < forward.length - 1 && wantUpshift(forward[now + 1])) requestShift(forward[now + 1]);
     else if (sim.engine < 1300 && now > 0) requestShift(forward[now - 1]);
   }
 }
@@ -260,8 +286,9 @@ function stepAmt(dt) {
 function simReadout() {
   const slip = sim.engine - sim.input;
   const status = sim.stalled ? 'エンスト' : engage() === 0 ? '切れている（エンジンの力は後ろへ伝わらない）' : sim.slipping ? '半クラッチ（滑りながら伝えている）' : 'つながっている';
-  const speed = sim.output / state.car.finalRatio * 2 * Math.PI * state.car.tire / 2 * 60 / 1000;
+  const speed = carSpeed();
   const auto = state.clutchMode === 'auto' ? ` ／ 自動クラッチ: ${{ idle: '待機', open: 'クラッチを切っている', shift: '段を変えている', close: 'クラッチをつないでいる' }[amt.phase]}` : '';
-  return `エンジン（ドライブプレート） ${n0(sim.engine)} rpm ／ インプット軸（ドリブンプレート） ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ クラッチを通るトルク ${n0(sim.torque)} N·m ／ ${status} ／ 車速 ${n1(speed)} km/h${auto}`
+  const target = state.input === 'speed' ? `目標の車速 ${n0(state.speed)} km/h ／ ` : '';
+  return target + `エンジン（ドライブプレート） ${n0(sim.engine)} rpm ／ インプット軸（ドリブンプレート） ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ クラッチを通るトルク ${n0(sim.torque)} N·m ／ ${status} ／ 車速 ${n1(speed)} km/h${auto}`
     + (sim.message ? `<br><b>${sim.message}</b>` : '');
 }

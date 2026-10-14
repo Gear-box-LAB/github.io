@@ -49,8 +49,10 @@
       </div>
       <div class="buttons" id="detailButtons"></div>
       <div class="buttons" id="engineInputs">
-        <label>エンジン回転数 <input type="number" id="rpm" value="3000" min="0" step="100"> rpm</label>
-        <label>トルク <input type="number" id="torque" value="200" min="1" step="10"> N·m</label>
+        <span class="buttons" id="inputMode"></span>
+        <label class="byEngine">エンジン回転数 <input type="number" id="rpm" value="3000" min="0" step="100"> rpm</label>
+        <label class="byEngine">トルク <input type="number" id="torque" value="200" min="1" step="10"> N·m</label>
+        <label class="bySpeed">目標の車速 <input type="number" id="speed" value="60" min="0" step="10"> km/h</label>
         <label>回転の見せ方 <select id="slow">
           <option value="40">1/40の速さ</option>
           <option value="10">1/10の速さ</option>

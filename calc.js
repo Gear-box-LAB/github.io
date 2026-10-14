@@ -45,6 +45,8 @@ const state = {
   car3d: false,         // FR車の模型に載せて見る
   carZoom: false,       // 車に載せたまま、トランスミッションに近づいて見る
       // 段階6（ドラム式）で、ドラムまわりに近づいて見る
+  input: 'engine',      // 入力の方式: 'engine'（エンジン回転数とトルク）か 'speed'（車速）
+  speed: 60,            // 目標の車速 (km/h)。input が 'speed' のときに使う
   rpm: 3000,            // エンジン回転数
   slow: 40,             // 回転を 1/slow の速さで見せる
   torque: 200,          // エンジントルク (N·m)
@@ -107,6 +109,8 @@ function gearRatio(g) {
 function calc(index) {
   const c = {};
   c.rpm = state.rpm;
+  // 車速を入力にしたとき（クラッチの段階より前）: その段で目標の車速を出すためのエンジン回転数を逆算する
+  if (state.input === 'speed' && state.step < STEP_CLUTCH) c.rpm = state.gears[index] ? speedRpm(index) : IDLE_RPM;
   c.torque = state.torque;
   c.z1 = state.red.drive;
   c.z2 = state.red.driven;
@@ -132,6 +136,15 @@ function calc(index) {
 
 // k番のスリーブと空転ギヤを置く軸。選べるのは「設計する」の段階から
 const sideOf = k => state.step >= STEP_DESIGN ? state.sleeveSide[k] : 'out';
+
+const IDLE_RPM = 800;   // アイドリングの回転数
+
+// 車速 v (km/h) を出すためのエンジン回転数: タイヤの回転数 × 最終減速比 × 変速比（リバースも大きさだけ）
+//   タイヤの回転数 = v × 1000 / 60 / (π × タイヤ直径)
+function speedRpm(index) {
+  const tire = state.speed * 1000 / 60 / (Math.PI * state.car.tire);
+  return tire * state.car.finalRatio * Math.abs(state.red.driven / state.red.drive * gearRatio(state.gears[index]));
+}
 
 // i番の空転ギヤの回転数（rpm）と、その空転ギヤが乗っている軸の回転数（shaftRpm）
 // アウトプット軸側にあればカウンタ軸に回され、カウンタ軸側にあればアウトプット軸に回される

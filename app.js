@@ -252,6 +252,7 @@ const LESSONS = [
       '<b>半クラッチ</b>: ペダルを途中まで戻すと、押し付ける力が弱くなり、伝えられるトルクが小さくなります。エンジン側とインプット軸側が違う速さで回りながら（滑りながら）力を伝えます。これが半クラッチです。' + (state.clutch.type === 'multi' ? '図では、茶色のドライブプレートと鋼のドリブンプレートが違う速さで回るのが見えます。' : '図では、ディスクとフライホイールが違う速さで回るのが見えます。') + '滑っている間、伝えたトルク × 回転差のぶんが熱になります。',
       '<b>操作</b>: 図の下のクラッチペダルを動かしてください。20%までは完全につながり、70%以上で切れます。段を変えるときは、ペダルを70%以上踏んでから段のボタンを押します。発進は、ペダルを踏んで1速に入れ、ゆっくり戻します。急に戻すと回転数が大きく下がり、エンジン回転数を低くしているとエンストします。',
       '<b>自動クラッチ（AMT）</b>: 図の下の「自動クラッチ（AMT）」を選ぶと、機械がクラッチ操作を代わりに行います。段を押すと「クラッチを切る → 段を変える → 半クラッチでつなぐ」を自動で行います。「D」を押すと、停車中は1速で発進し、エンジン回転数が目標に近づくと1段ずつ上げます。MTの部品をそのまま使って、操作だけを自動にした仕組みです。',
+      '<b>入力の方式</b>: 「車速で入力」を選ぶと、目標の車速に向けて、運転者（AMTでは制御）がアクセルを調整します。発進は半クラッチの間 2000 rpm を保ち、つながった後は、その段で目標の車速に必要な回転数を目指します。D では、2800 rpm を超えたか目標の車速に近づくと、上げた後が 1500 rpm 以上ある範囲で1段上げます。そのため、同じ車速でもエンジン回転数の低い高い段で走ります。段階8までは、選んだ段で目標の車速を出すためのエンジン回転数を逆算して表示します。',
       'エンジン回転数の欄は、運転者（AMTでは制御）がアクセルで保とうとする回転数です。タイヤは地面に対して滑らない想定で、タイヤの回転が車速になります。'
     ]),
     symbols: `μ: 摩擦係数、F: 板を押し付ける力、${sub('R', 'o')} と ${sub('R', 'i')}: 摩擦面の外側と内側の半径、N: 摩擦面の数、e: ペダルで決まる押し付けの割合（1 = 完全につながる、0 = 切れている）、${sub('T', 'e')}: エンジントルク、Δn: エンジン側とインプット軸側の回転差、${sub('J', 'v')}: 車の質量 m をインプット軸から見た慣性モーメント、r: タイヤの半径。数値は説明用の仮の値です。`,
@@ -556,12 +557,17 @@ function renderGearButtons() {
   }
   el('gearButtons').innerHTML = html;
   el('pedalBox').hidden = state.step < STEP_CLUTCH;
+  // 入力の方式（エンジン回転数とトルク / 車速）
+  const input = (id, name) => `<button type="button" data-input="${id}" class="${state.input === id ? 'current' : ''}">${name}</button>`;
+  el('inputMode').innerHTML = input('engine', 'エンジン回転数とトルクで入力') + input('speed', '車速で入力');
+  document.querySelector('.bar').dataset.input = state.input;
   // クラッチ操作の切り替え。自動のときは、ペダルは機械が動かすので触れない
   const mode = (id, name) => `<button type="button" data-mode="${id}" class="${state.clutchMode === id ? 'current' : ''}">${name}</button>`;
   el('clutchMode').innerHTML = mode('manual', '手動クラッチ') + mode('auto', '自動クラッチ（AMT）')
     + (state.clutchMode === 'auto' ? `<button type="button" data-drive="true" class="${amt.drive ? 'current' : ''}">D（自動で変速）</button>` : '');
   el('pedal').disabled = state.clutchMode === 'auto';
-  el('simReadout').hidden = state.step < STEP_CLUTCH;
+  el('simReadout').hidden = state.step < STEP_CLUTCH && state.input !== 'speed';
+  if (state.step < STEP_CLUTCH && state.input === 'speed') el('simReadout').innerHTML = speedReadout();
   el('engineInputs').hidden = state.detail;
 }
 
@@ -656,6 +662,15 @@ function update() {
   renderLesson();
   renderBubble();
   buildScene();
+}
+
+// 段階8までで、車速を入力にしたとき: 今の段と、すべての前進の段で必要なエンジン回転数
+function speedReadout() {
+  const c = calc(state.gear);
+  const now = c.engaged ? `${gearName(state.gear)}で ${n0(state.speed)} km/h を出すには、エンジン ${n0(c.rpm)} rpm` : `ニュートラル（エンジンはアイドリング ${IDLE_RPM} rpm）`;
+  const list = shownGears().map((g, i) => `${safe(g.name)} ${n0(speedRpm(i))}`).join('、');
+  return `${now} ／ 各段に必要なエンジン回転数 (rpm): ${list || 'まだギヤがない'}`
+    + (c.engaged && c.rpm > REV_LIMIT ? `<br><b>${REV_LIMIT} rpm を超えるので、実際にはこの段では出せない速さです。</b>` : '');
 }
 
 // クラッチの段階: 図の下の状態と、数式タブの値を、0.2秒ごとに書き換える（scene.js の毎フレームから呼ばれる）
@@ -805,6 +820,13 @@ el('bubbleClose').addEventListener('click', () => pick(null));
 
 el('rpm').addEventListener('input', e => { state.rpm = Math.max(0, Number(e.target.value) || 0); update(); });
 el('slow').addEventListener('change', e => { state.slow = Number(e.target.value); });
+el('speed').addEventListener('input', e => { state.speed = Math.max(0, Number(e.target.value) || 0); update(); });
+el('inputMode').addEventListener('click', e => {
+  if (!e.target.dataset.input) return;
+  state.input = e.target.dataset.input;
+  resetSim();
+  update();
+});
 el('torque').addEventListener('input', e => { state.torque = positive(e.target.value); update(); });
 
 // 説明パネルの入力欄（数値の欄と、段階7のギヤの表）
