@@ -19,6 +19,7 @@
 
 <main class="bench">
   <section class="stage" id="stageBox">
+    <div class="view3d">   <!-- 3Dの図と、その上に重ねる物（下の操作の帯には重ねない） -->
     <canvas id="stage" aria-label="ギヤボックスの3Dの図"></canvas>
     <p class="hint" id="hint"></p>
     <div class="buttons view" id="viewButtons"></div>
@@ -30,12 +31,17 @@
         <button type="button" id="graphClose">閉じる</button>
       </div>
       <canvas id="graphCanvas"></canvas>
+      <div class="buttons graphScroll">
+        <input type="range" id="graphScroll" min="0" max="0" step="0.1" value="0" aria-label="グラフの表示位置（秒）">
+        <button type="button" id="graphFollow" hidden>最新へ</button>
+      </div>
       <div class="buttons">
         <button type="button" id="graphStart">計測開始</button>
         <button type="button" id="graphStop">中止</button>
         <button type="button" id="graphReset">リセット</button>
       </div>
     </aside>
+    </div>
 
     <aside class="bubble" id="bubble" hidden>
       <button type="button" class="close" id="bubbleClose">閉じる</button>
@@ -50,6 +56,7 @@
         <label>クラッチペダル <input type="range" id="pedal" min="0" max="100" value="0"> <span id="pedalValue">0%</span></label>
         <button type="button" id="restartEngine" hidden>エンジンをかけ直す</button>
       </div>
+      <label id="brakeBox" hidden>ブレーキ（アウトプット軸） <input type="range" id="brake" min="0" max="100" value="0"> <span id="brakeValue">0%</span></label>
       <div class="buttons" id="detailButtons"></div>
       <div class="buttons" id="engineInputs">
         <span class="buttons" id="inputMode"></span>

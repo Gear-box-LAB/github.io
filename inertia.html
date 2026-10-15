@@ -19,13 +19,17 @@
 
 <main class="bench">
   <section class="stage" id="stageBox">
+    <div class="view3d">
     <canvas id="stage" aria-label="回る物の3Dの図"></canvas>
     <p class="hint">車の部品にトルクをかけて、回り方を比べます。赤い印で回り方が見えます。ドラッグで向きを変えられます。</p>
     <div class="tags" id="tags" aria-hidden="true"></div>
     <p class="banner" id="banner" hidden></p>
+    <canvas class="strip" id="strip" hidden aria-label="それぞれのホイールで走った車の進み方"></canvas>
+    </div>
     <div class="bar">
       <div class="buttons">
         <button type="button" id="push">同じトルクで回す</button>
+        <button type="button" id="auto" hidden>自動で変速（1速 → 6速）</button>
         <button type="button" id="stop">止める</button>
       </div>
       <div class="buttons" id="controls"></div>

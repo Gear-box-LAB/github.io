@@ -125,10 +125,11 @@ const J_INPUT = 0.02;       // インプット軸側の慣性モーメント (kg
 const CAR_MASS = 1000;      // 車の質量 (kg)
 const BEARING = { fixed: 0.6, perRad: 0.004 };   // インプット軸側の軸受けとギヤ（オイルをかき回す）の抵抗: 0.6 N·m + 0.004 N·m × 角速度
 const WET_DRAG = 0.0012;    // 湿式の引きずり: 回転差 1 rad/s あたりの N·m
-const REV_LIMIT = 6500;     // 自動クラッチが許す、変速後のエンジン回転数の上限 (rpm)
+const REV_LIMIT = 6500;
+const BRAKE_MAX = 0.8 * 1000 * 9.81;   // ブレーキ100%の力 (N): 車 1,000 kg を 0.8 G で止める力     // 自動クラッチが許す、変速後のエンジン回転数の上限 (rpm)
 const ROAD = { rolling: 0.012, airCdA: 0.65, air: 1.2 };   // 転がり抵抗係数、空気抵抗（Cd × 前面投影面積 m²）、空気の密度 kg/m³
 const RPM = 2 * Math.PI / 60;   // rpm → rad/s
-const sim = { pedal: 0, engine: 3000, input: 3000, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' };
+const sim = { brake: 0, pedal: 0, engine: 3000, input: 3000, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' };
 
 // 車の質量を、インプット軸から見た慣性モーメントに直したもの（段に入っているときだけ）
 function carInertia(c) {
@@ -137,10 +138,11 @@ function carInertia(c) {
 
 // インプット軸側を止めようとするトルク（大きさ）。軸受けの抵抗と、段に入っていれば走行抵抗
 // 走行抵抗 (N): 転がり抵抗 + 空気抵抗。止まっていれば 0
+// 走行抵抗 + ブレーキ (N)。止まっていれば 0（止まった車を、逆に動かさない）
 function roadForce(c) {
   if (Math.abs(sim.output) < 1) return 0;
   const v = Math.abs(sim.output) / c.final * RPM * c.radius;   // 車速 (m/s)
-  return ROAD.rolling * CAR_MASS * 9.81 + 0.5 * ROAD.air * ROAD.airCdA * v * v;
+  return ROAD.rolling * CAR_MASS * 9.81 + 0.5 * ROAD.air * ROAD.airCdA * v * v + sim.brake * BRAKE_MAX;
 }
 
 function inputLoad(c) {
@@ -170,9 +172,11 @@ const towardZero = (value, amount) => Math.sign(value) * Math.max(0, Math.abs(va
 
 function resetSim() {
   const start = state.input === 'speed' ? IDLE_RPM : state.rpm;
-  Object.assign(sim, { pedal: 0, engine: start, input: start, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' });
+  Object.assign(sim, { brake: 0, pedal: 0, engine: start, input: start, output: 0, torque: 0, slipping: false, transmitting: false, stalled: false, message: '' });
   Object.assign(amt, { phase: 'idle', drive: false, launch: false });
   el('pedal').value = 0;
+  el('brake').value = 0;
+  el('brakeValue').textContent = '0%';
 }
 
 function stepSim(dt) {
@@ -289,6 +293,6 @@ function simReadout() {
   const speed = carSpeed();
   const auto = state.clutchMode === 'auto' ? ` ／ 自動クラッチ: ${{ idle: '待機', open: 'クラッチを切っている', shift: '段を変えている', close: 'クラッチをつないでいる' }[amt.phase]}` : '';
   const target = state.input === 'speed' ? `目標の車速 ${n0(state.speed)} km/h ／ ` : '';
-  return target + `エンジン（ドライブプレート） ${n0(sim.engine)} rpm ／ インプット軸（ドリブンプレート） ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ クラッチを通るトルク ${n0(sim.torque)} N·m ／ ${status} ／ 車速 ${n1(speed)} km/h${auto}`
+  return target + (sim.brake > 0 ? `ブレーキ ${n0(sim.brake * 100)}% ／ ` : '') + `エンジン（ドライブプレート） ${n0(sim.engine)} rpm ／ インプット軸（ドリブンプレート） ${n0(sim.input)} rpm ／ 回転差 ${n0(slip)} rpm ／ クラッチを通るトルク ${n0(sim.torque)} N·m ／ ${status} ／ 車速 ${n1(speed)} km/h${auto}`
     + (sim.message ? `<br><b>${sim.message}</b>` : '');
 }

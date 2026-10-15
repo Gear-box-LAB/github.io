@@ -40,7 +40,8 @@ const box = new THREE.Group();
 box.rotation.y = Math.PI / 2;
 world.add(box);
 
-let builtFlow = false;   // 今の図で、力の通り道を橙色にしているか
+let builtFlow = false;
+let brakeCaliper = null;   // ブレーキのキャリパー（強さで光らせる）   // 今の図で、力の通り道を橙色にしているか
 let spinners = [];    // 回る部品: { mesh, angle（今の角度を返す関数）, axis }
 let sliders = [];     // スリーブ: { group, k, home }
 const sleeveNow = [0, 0, 0, 0];                              // スリーブの今の位置（-1〜1）
@@ -247,7 +248,12 @@ function buildScene() {
   put(gearGeometry(c.z2, A - redUpper, 0.5), 'steel', 'red', flow, -A, RED_Z, counterAngle);
   shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow, counterAngle);
 
-  if (state.step >= STEP_OUTPUT) shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
+  if (state.step >= STEP_OUTPUT) {
+    shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
+    // ブレーキ: アウトプット軸の後ろの端のディスクを、キャリパーがはさむ
+    addMark(put(cylinder(0.9, 0.12, 40), 'steel', 'brake', false, 0, endZ - 0.35, outputAngle), 0.9, 0.12);
+    brakeCaliper = put(new THREE.BoxGeometry(0.4, 0.35, 0.3), 'key', 'brake', false, 0.75, endZ - 0.35);
+  }
   list.forEach((g, i) => addGearPair(g, i, flow && i === state.gear, counterAngle, outputAngle));
   if (state.step >= STEP_SLEEVE) {
     for (let k = 0; k < sleeveCount(); k++) addSleeve(k, flow, counterAngle, outputAngle);
@@ -343,6 +349,7 @@ function frame(now) {
   });
   if (state.detail) moveSynchro(dt);
   if (state.car3d && carGround) moveGround();   // 車に載せているときは、地面を動かす（car.js）
+  if (brakeCaliper && brakeCaliper.parent) brakeCaliper.material.emissive.setRGB(sim.brake * 0.9, sim.brake * 0.2, 0);
   stepGraph(dt);   // アウトプット軸のグラフ（graph.js）
   controls.update();
   renderer.render(world, camera);

@@ -103,14 +103,15 @@ function flywheel(group, heavyRim) {
 const LESSONS = [
   {
     level: 'jh', name: '動かしにくさ', title: '重いホイールほど、回し始めにくく、止めにくい',
-    race: true,
+    strip: true,   // 下の道路に、このホイールで走る車を出す
     bodies: () => [
       { name: '鍛造アルミホイール 6 kg', J: 0.5 * 6 * 0.2 ** 2, goal: 1000, tagY: -0.32, build: g => wheel(g, 0.22, COLOR.alu, 5) },
       { name: 'スチールホイール 12 kg', J: 0.5 * 12 * 0.2 ** 2, goal: 1000, tagY: -0.32, build: g => wheel(g, 0.22, COLOR.dark, 8) }
     ],
     text: [
       '止まっている物は止まったまま、動いている物は動いたままでいようとします。この性質を「慣性」と言います。重い物ほど、この性質が強くなります。',
-      '図の2本は、同じ大きさの車のホイールです。左は軽い鍛造アルミ、右は重いスチール（鉄）です。「よーいドン」を押すと、同じトルクで回し始め、先に 1,000 rpm に着いた方が勝ちです。',
+      '図の2本は、同じ大きさの車のホイールです。左は軽い鍛造アルミ、右は重いスチール（鉄）です。「回す」を押すと、同じトルクで回し始め、1,000 rpm まで回します。',
+      '下の道路の2台の車は、それぞれのホイールで走ったときの進み方です。回り始めが速い方が先に進み、その差は、両方が 1,000 rpm になった後も縮まりません。',
       '回る物の「回しにくさ」を、慣性モーメント（イナーシャ）と言います。記号は J、単位は kg·m² です。',
       'スポーツカーが軽いホイールを使うのは、タイヤを回し始めやすく、止めやすくするためです。加速とブレーキの両方がよくなります。'
     ],
@@ -121,14 +122,14 @@ const LESSONS = [
   },
   {
     level: 'jh', name: '形で変わる', title: '同じ重さでも、外側に重さがあるほど回しにくい',
-    race: true,
+    strip: true,   // 下の道路に、このホイールで走る車を出す
     bodies: () => [
       { name: '中心に重さ（軽量フライホイール型）8 kg', J: 0.5 * 8 * 0.07 ** 2 + 0.002, goal: 3000, tagY: -0.25, build: g => flywheel(g, false) },
       { name: '外周に重さ（ノーマル型）8 kg', J: 8 * 0.13 ** 2, goal: 3000, tagY: -0.25, build: g => flywheel(g, true) }
     ],
     text: [
       'エンジンのフライホイールを2種類並べました。どちらも重さは 8 kg、外の大きさも同じです。違うのは、重さ（橙色の部分）がどこにあるかです。',
-      '「よーいドン」を押すと、中心に重さを集めた左の方が、ずっと早く回ります。回る中心から遠い所の重さほど、回しにくさに強く効くからです。',
+      '「回す」を押すと、中心に重さを集めた左の方が、ずっと早く回ります。下の道路の車の差で、どれくらい違うかがわかります。回る中心から遠い所の重さほど、回しにくさに強く効くからです。',
       'レース用の「軽量フライホイール」は、重さを減らすだけでなく、外周の肉を削ります。エンジンの吹け上がりが鋭くなる代わりに、回転のむらが出やすく、発進でエンストしやすくなります。',
       'フィギュアスケートの選手が、腕を縮めると速く回るのと同じ理由です。'
     ],
@@ -140,15 +141,15 @@ const LESSONS = [
   },
   {
     level: 'hs', name: '半径の2乗', title: 'タイヤを大きくすると、半径の2乗で回しにくくなる',
-    race: true,
+    strip: true,   // 下の道路に、このホイールで走る車を出す
     inputs: [['右のタイヤの半径 (m)', 'tire', 0.28, 0.42, 0.01]],
     bodies: () => [
-      { name: '標準のタイヤ（半径 0.30 m）', J: tireJ(0.30), goal: 800, torque: 20, x: -0.45, tagY: -0.5, build: g => wheel(g, 0.21, COLOR.alu, 5, 0.30) },
-      { name: `大きいタイヤ（半径 ${n2(p.tire)} m）`, J: tireJ(p.tire), goal: 800, torque: 20, x: 0.45, tagY: -0.5, build: g => wheel(g, Math.min(p.tire - 0.08, 0.27), COLOR.alu, 5, p.tire) }
+      { name: '標準のタイヤ（半径 0.30 m）', J: tireJ(0.30), goal: 800, torque: 20, roll: 0.30, x: -0.45, tagY: -0.5, build: g => wheel(g, 0.21, COLOR.alu, 5, 0.30) },
+      { name: `大きいタイヤ（半径 ${n2(p.tire)} m）`, J: tireJ(p.tire), goal: 800, torque: 20, roll: p.tire, x: 0.45, tagY: -0.5, build: g => wheel(g, Math.min(p.tire - 0.08, 0.27), COLOR.alu, 5, p.tire) }
     ],
     text: [
       'タイヤの重さの多くは、外側のゴムの部分にあります。中心から距離 r の所にある質量 m は、J = m × r² だけ回しにくさを持ちます。r が2乗で効くので、半径が少し大きくなるだけで J は大きく増えます。',
-      'スライダーで右のタイヤを大きくして、「よーいドン」（トルク 20 N·m）で比べてください。半径が 1.2 倍になると、ゴムの部分の J は 1.44 倍になります。',
+      'スライダーで右のタイヤを大きくして、「回す」（トルク 20 N·m）で比べてください。下の道路の車は、タイヤの大きさに合わせた距離を進みます（大きいタイヤは1回転で進む距離が長いので、回転が遅くても追いつくことがあります）。半径が 1.2 倍になると、ゴムの部分の J は 1.44 倍になります。',
       '大きいタイヤ（インチアップ）は見た目がよくなりますが、回しにくくなり、加速やブレーキが少し鈍くなります。ここでは、タイヤの重さ 9 kg がゴムの真ん中（半径の 0.9 倍）に集まっていると考えています。'
     ],
     formula: b => [
@@ -261,6 +262,7 @@ const LESSONS = [
       'エンジンがアクセルで速く回ろうとするとき、回さないといけない物は2つあります。エンジン側の回る部品（フライホイールなど）と、段に入っていれば車そのものです。',
       '車は回転していませんが、タイヤを通してエンジンとつながっているので、エンジンから見ると「回しにくさ」を持ちます。換算した慣性モーメントは m × r² / (変速比 × 最終減速比)² です。',
       '図の車で、段を選んで「アクセルを踏む」を押してください（トルク 150 N·m）。1速ではエンジンが一気に吹け上がり、すぐレッドゾーンに着きます。高い段では車が重く見え、なかなか回転が上がりません。地面の流れと、車速の数字で比べてください。',
+      '「自動で変速（1速 → 6速）」を押すと、1速から発進し、6,000 rpm で1段ずつ上げていきます。上の段ほどエンジンの回転の上がり方が遅くなり、6速では、走行抵抗（転がり抵抗と空気抵抗）に勝つのがやっとになります。上の段で速く加速するには、もっと大きなトルクが要る、ということです。',
       '同じ理由で、クラッチを切るとエンジン側の J だけになり、空ぶかしするとすぐ回転が上がります。値はギヤボックスLABの初期値と、説明用の仮の値です。'
     ],
     formula: b => {
@@ -269,7 +271,9 @@ const LESSONS = [
         ['エンジン側の J', 'エンジン + フライホイール + クラッチ', PARTS.map(x => `${x[0]} ${x[1]}`).join('、') + ` → 合計 ${n3(ENGINE_J)} kg·m²`],
         ['車をエンジンから見た J', `${sub('J', 'v')} = m × r² / (i × ${sub('i', 'f')})²`, `${CAR.mass} × ${CAR.tire}² ÷ (${i} × ${CAR.final})² = ${n3(vehicleJ(i))} kg·m²`],
         ['全段の比較', '段: 車の J（エンジンから見た値）', RATIOS.map(r => `${r[0]} ${n3(vehicleJ(r[1]))}`).join('、')],
-        ['トルク 150 N·m での回転の上がり方', 'α = T / (J + Jv)', `${RATIOS[p.gear][0]}: 1秒に ${n0(150 / b[0].J / RPM)} rpm、クラッチを切ると 1秒に ${n0(150 / ENGINE_J / RPM)} rpm`]
+        ['トルク 150 N·m での回転の上がり方（止まっているとき）', 'α = T / (J + Jv)', `${RATIOS[p.gear][0]}: 1秒に ${n0(150 / b[0].J / RPM)} rpm、クラッチを切ると 1秒に ${n0(150 / ENGINE_J / RPM)} rpm`],
+        ['タイヤが地面を押す力（駆動力）', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} / r`, RATIOS.map(r => `${r[0]} ${n0(150 * r[1] * CAR.final / CAR.tire)} N`).join('、')],
+        ['走行抵抗', 'F = μ × m × g + 1/2 × ρ × Cd·A × v²', `時速 100 km で ${n0(roadForce(100 / 3.6))} N、時速 150 km で ${n0(roadForce(150 / 3.6))} N（駆動力から引いた残りが、加速に使われる）`]
       ];
     }
   },
@@ -280,7 +284,8 @@ const LESSONS = [
     bodies: () => [syncRig()],
     text: [
       '変速するとき、シンクロは「回転を合わせる側」（クラッチディスク、インプット軸、カウンタ軸、ギヤ）の回転数を、摩擦で変えます。クラッチは切れているので、エンジン側は入りません。',
-      '実際は 0.1 秒ほどで終わるので、図は10倍ゆっくり見せています。図の左は、つなぎたいギヤ（金色の円すい面＝コーン付き）です。右のスリーブとハブは、アウトプット軸と一緒に回っています。「シンクロで合わせる」を押すと、コーンの摩擦でギヤが速くなり、回転がそろった瞬間に、スリーブが左へ滑ってギヤにかみ合います。',
+      '実際は 0.1 秒ほどで終わるので、図は10倍ゆっくり見せています。部品は1本のアウトプット軸の上に、左から「ギヤ（ドグ歯とコーン付き）→ シンクロナイザリング → ハブとスリーブ」の順に並んでいます。ギヤは軸の上で空回りし、ハブは軸に固定され、リングとスリーブはハブと一緒に回ります。見やすいように、部品の間を実物より広くしています。',
+      '「シンクロで合わせる」を押すと、スリーブがリングを押し、リングの内側がギヤのコーンに当たります。その摩擦でギヤが速くなり、回転がそろった瞬間に、スリーブが左へ滑ってドグ歯にかみ合います。',
       '摩擦している間は、コーンが熱で赤く光ります。J が大きい、回転差が大きい、摩擦トルクが小さいと、合わせる時間が長くなります。',
       'クラッチディスクを軽くしたり、シンクロのコーンを2重、3重にして摩擦トルクを増やしたりするのは、この時間を短くして、変速を軽く速くするためです。'
     ],
@@ -321,13 +326,20 @@ function meter(g, J) {
 }
 
 // 段階7: 横から見た車。前にエンジンとフライホイール、後ろにタイヤ。地面のしま模様が流れる
+// 走行抵抗（転がり抵抗 + 空気抵抗）も入れる。自動で変速するときは、6,000 rpm で1段上げる
+const SHIFT_RPM = 6000;
+const roadForce = v => 0.012 * CAR.mass * 9.81 + 0.5 * 1.2 * 0.65 * v * v;   // 走行抵抗 (N)。v = 車速 (m/s)
+const ratioOf = b => RATIOS[b.gear][1] * CAR.final;                          // 変速比 × 最終減速比
+
 function carRig() {
-  const i = RATIOS[p.gear][1];
+  const wheelParts = [-0.55, 1.75].map(dx => ({ x: dx, y: -0.25, z: 0.3, ratio: 1 / (RATIOS[p.gear][1] * CAR.final), build: w => { w.scale.setScalar(0.7); wheel(w, 0.21, COLOR.alu, 5, 0.315); } }));
   return {
-    name: `エンジン側 + ${RATIOS[p.gear][0]}で見た車`, J: ENGINE_J + vehicleJ(i), torque: 150, goal: REDLINE, x: -0.6, tagY: 0.95,
+    gear: p.gear, name: `エンジン側 + ${RATIOS[p.gear][0]}で見た車`, J: ENGINE_J + vehicleJ(RATIOS[p.gear][1]), torque: 150, goal: REDLINE, x: -0.6, tagY: 0.95,
     tags: [['エンジン', -0.3, -0.25], ['フライホイール', 0, 0.3], ['トランスミッション', 0.35, -0.2], ['プロペラシャフト', 1.0, -0.25], ['後輪', 1.75, 0.15]],
     build: g => { flywheel(g, true); },   // 回る本体 = フライホイール（エンジンの回転）
-    parts: [-0.55, 1.75].map(dx => ({ x: dx, y: -0.25, z: 0.3, ratio: 1 / (i * CAR.final), build: w => { w.scale.setScalar(0.7); wheel(w, 0.21, COLOR.alu, 5, 0.315); } })),
+    parts: wheelParts,
+    // エンジンから見た走行抵抗のトルク = 走行抵抗 × タイヤの半径 / (変速比 × 最終減速比)
+    load: b => roadForce(b.omega / ratioOf(b) * CAR.tire) * CAR.tire / ratioOf(b),
     decor: g => {
       const body = add(g, new THREE.BoxGeometry(3.2, 0.55, 0.9), COLOR.body, 0.6, 0.15, 0, { transparent: true, opacity: 0.18, depthWrite: false });
       body.material.side = THREE.DoubleSide;
@@ -342,46 +354,81 @@ function carRig() {
       g.userData.ground = ground;
     },
     update: (b, dt) => {
-      b.distance = (b.distance || 0) + b.omega / (i * CAR.final) * CAR.tire * dt / 20;   // 1/20 の速さで見せる
-      b.decor.userData.ground.position.x = (((b.distance % 1) + 1) % 1);   // しま模様は 1 m ごとに同じ
-      b.speed = b.omega / (i * CAR.final) * CAR.tire * 3.6;
-      if (b.omega >= REDLINE * RPM && state.pushing) banner(`レッドゾーン！ ${RATIOS[p.gear][0]}で時速 ${n0(b.speed)} km。次の段へシフトアップ`);
+      b.road = (b.road || 0) + b.omega / ratioOf(b) * CAR.tire * dt / 20;   // 地面が流れた距離。1/20 の速さで見せる
+      b.decor.userData.ground.position.x = (((b.road % 1) + 1) % 1);            // しま模様は 1 m ごとに同じ
+      b.speed = b.omega / ratioOf(b) * CAR.tire * 3.6;
+      if (b.auto && state.pushing && b.omega >= SHIFT_RPM * RPM && b.gear < RATIOS.length - 1) shiftUp(b);
+      if (!b.auto && b.omega >= REDLINE * RPM && state.pushing) banner(`レッドゾーン！ ${RATIOS[b.gear][0]}で時速 ${n0(b.speed)} km。次の段へシフトアップ`);
     }
   };
 }
 
-// 段階8: つなぎたいギヤ（コーン付き）と、一定の速さで回るスリーブとハブ
+// 1段上げる: 車速はそのまま。エンジンの回転数は、新しい変速比に合わせて下がる。J も新しい段の値になる
+function shiftUp(b) {
+  const before = ratioOf(b);
+  b.gear += 1;
+  p.gear = b.gear;
+  b.omega *= ratioOf(b) / before;
+  b.J = ENGINE_J + vehicleJ(RATIOS[b.gear][1]);
+  b.parts.forEach(part => { part.ratio = 1 / ratioOf(b); });
+  b.name = `エンジン側 + ${RATIOS[b.gear][0]}で見た車`;
+  el('tags').children[0].textContent = b.name;
+  const slider = document.querySelector('[data-key="gear"]');
+  slider.value = b.gear;
+  slider.nextElementSibling.textContent = RATIOS[b.gear][0];
+  banner(`${RATIOS[b.gear][0]}へシフトアップ（時速 ${n0(b.speed)} km、${n1(b.time)} 秒）`);
+  renderLesson();
+}
+
+// 段階8: 1本の軸の上に、左から ギヤ（ドグ歯とコーン付き）→ シンクロナイザリング → ハブとスリーブ が並ぶ
+// ギヤは軸の上で空回り。ハブは軸に固定され、スリーブとリングはハブと一緒に回る（アウトプット軸の速さ）
+// 位置は、ギヤの中心からの軸方向の距離 (m)。部品がぶつからないように、半径と位置を決めている
+const SYNC = { dog: 0.04, cone: 0.09, ringFree: 0.2, ringPress: 0.12, hub: 0.32, sleeveFree: 0.32, sleevePush: 0.26, sleeveDone: 0.065 };
+
+function spinner(parent, x, build) {   // 軸（x方向）のまわりに回る部品のまとまり
+  const g = new THREE.Group();
+  g.position.x = x;
+  g.rotation.y = Math.PI / 2;   // 部品の軸（z）を、画面の左右（x）に向ける
+  build(g);
+  parent.add(g);
+  return g;
+}
+
 function syncRig() {
   return {
-    name: '回転を合わせる側（ギヤとコーン）', J: p.syncJ, torque: p.syncT, goal: p.syncDiff, x: -0.25, tagY: -0.3,
-    tags: [['コーン（金色）', 0, 0.24], ['スリーブとハブ（一定の速さ）', 0.5, 0.24]],
+    name: 'ギヤ（空回り。回転を合わせる側）', J: p.syncJ, torque: p.syncT, goal: p.syncDiff, x: -0.25, axisX: true, tagY: -0.3,
+    tags: [['コーン（金色）', SYNC.cone, -0.13], ['ドグ歯', SYNC.dog, 0.17], ['シンクロナイザリング', SYNC.ringFree, 0.16], ['ハブとスリーブ（軸と一緒に回る）', SYNC.hub + 0.05, 0.25], ['アウトプット軸', 0.58, -0.07]],
     build: g => {
-      add(g, teeth(0.16, 40, 0.012, 0.05), COLOR.alu);
-      g.userData.cone = add(g, new THREE.CylinderGeometry(0.08, 0.1, 0.07, 48).rotateX(Math.PI / 2), COLOR.brass, 0, 0, 0.06);
-      mark(g, 0.16, 0.03);
+      add(g, teeth(0.2, 48, 0.012, 0.05), COLOR.alu);                                          // ギヤの歯（カウンタ軸のギヤとかみ合う）
+      add(g, teeth(0.11, 24, 0.01, 0.03), COLOR.steel, 0, 0, SYNC.dog);                       // ドグ歯
+      g.userData.cone = add(g, new THREE.CylinderGeometry(0.065, 0.085, 0.07, 48).rotateX(Math.PI / 2), COLOR.brass, 0, 0, SYNC.cone);   // コーン
+      mark(g, 0.2, 0.03);
     },
     decor: g => {
-      const sleeve = new THREE.Group();
-      sleeve.position.set(0.45, 0, 0);
-      add(sleeve, annulus(0.15, 0.1, 0.09), COLOR.dark);
-      add(sleeve, teeth(0.075, 20, 0.01, 0.09), COLOR.steel);
-      mark(sleeve, 0.15, 0.05);
-      g.add(sleeve);
-      g.userData.sleeve = sleeve;
+      g.userData.shaft = spinner(g, 0.15, s => add(s, cyl(0.03, 0.9), COLOR.steel));
+      g.userData.hub = spinner(g, SYNC.hub, s => { add(s, teeth(0.11, 24, 0.01, 0.06), COLOR.steel); mark(s, 0.11, 0.035); });
+      g.userData.ring = spinner(g, SYNC.ringFree, s => { add(s, annulus(0.105, 0.08, 0.03), COLOR.brass); });
+      g.userData.sleeve = spinner(g, SYNC.sleeveFree, s => { add(s, annulus(0.17, 0.125, 0.08), COLOR.dark, 0, 0, 0, { transparent: true, opacity: 0.85 }); mark(s, 0.17, 0.045); });
     },
     update: (b, dt) => {
-      const sleeve = b.decor.userData.sleeve;
-      b.sleeveAngle = (b.sleeveAngle || 0) + p.syncDiff * RPM * dt / 10 / 20;   // 10倍スロー、1/20 の速さ
-      sleeve.rotation.z = -b.sleeveAngle;
+      const d = b.decor.userData;
+      // 軸、ハブ、リング、スリーブは、一定の速さで回る（10倍スロー、1/20 の速さで見せる）
+      b.hubAngle = (b.hubAngle || 0) + p.syncDiff * RPM * dt / 10 / 20;
+      [d.shaft, d.hub, d.ring, d.sleeve].forEach(part => { part.rotation.z = -b.hubAngle; });
       const done = b.omega >= p.syncDiff * RPM - 0.01;
       const slip = state.pushing && !done;
+      // スリーブを押すと、リングがコーンに当たって摩擦が出る。そろったら、スリーブがドグ歯にかみ合う
+      const ringTo = state.pushing ? SYNC.ringPress : SYNC.ringFree;
+      const sleeveTo = !state.pushing ? SYNC.sleeveFree : done ? SYNC.sleeveDone : SYNC.sleevePush;
+      d.ring.position.x += (ringTo - d.ring.position.x) * Math.min(1, dt * 10);
+      d.sleeve.position.x += (sleeveTo - d.sleeve.position.x) * Math.min(1, dt * 8);
       b.heat = Math.max(0, (b.heat || 0) + (slip ? p.syncT * (p.syncDiff * RPM - b.omega) : 0) * dt - 300 * dt);
-      b.group.userData.cone.material.emissive.setRGB(Math.min(1, b.heat / 200), Math.min(0.3, b.heat / 800), 0);
-      // そろったら、スリーブが左へ滑ってギヤにかみ合う
-      sleeve.position.x += ((done && state.pushing ? 0.27 : 0.45) - sleeve.position.x) * Math.min(1, dt * 8);
+      const glow = [Math.min(1, b.heat / 200), Math.min(0.3, b.heat / 800), 0];
+      b.group.userData.cone.material.emissive.setRGB(...glow);
+      d.ring.children[0].material.emissive.setRGB(...glow);
       if (done && state.pushing && !b.joined) {
         b.joined = true;
-        banner(`ガチャッ！回転がそろってつながった（${n2(b.time)} 秒）`);
+        banner(`ガチャッ！回転がそろって、スリーブがドグ歯にかみ合った（${n2(b.time)} 秒）`);
       }
     }
   };
@@ -423,6 +470,7 @@ function build() {
     Object.assign(b, { omega: 0, angle: 0, time: 0, heat: 0, finished: false });
     b.group = newGroup(x);
     b.build(b.group);
+    if (b.axisX) b.group.rotation.y = Math.PI / 2;   // 回る軸を画面の左右に向ける（回転は z のまわり）
     b.decor = newGroup(x);            // 回らない部分（メーター、キャリパー、車体など）
     if (makeDecor) makeDecor(b.decor);
     (b.parts || []).forEach(part => {
@@ -444,8 +492,13 @@ function frameCamera() {
   const half = Math.tan(camera.fov * Math.PI / 360);
   const height = state.step === 8 ? 0.45 : 0.75;   // 縦に見せたい高さの半分 (m)
   const distance = Math.max(width / 2 / (half * camera.aspect), height / half) * 1.1;
-  controls.target.set(state.step === 7 ? 0 : 0, 0, 0);
-  camera.position.set(width * 0.08, distance * 0.18, distance);
+  const strip = LESSONS[state.step - 1].strip;   // 下に道路を出す段階は、図を少し上に寄せる
+  controls.target.set(0, strip ? -0.18 : 0, 0);
+  camera.position.set(width * 0.08, distance * 0.18 + (strip ? -0.18 : 0), distance);
+  if (state.step === 8) {   // 軸を斜め前から見る
+    controls.target.set(-0.1, 0, 0);
+    camera.position.set(0.25, 0.4, 1.15 / Math.min(1, camera.aspect));
+  }
 }
 
 // 画面上部の知らせ（ゴール、レッドゾーン、ガチャッ）
@@ -466,18 +519,21 @@ function frame(now) {
   const dtp = dt / (lesson.slowmo || 1);   // 計算の時間（スローのときは短くする）
   bodies.forEach(b => {
     const goal = (b.goal || 3000) * RPM;
+    const load = b.load ? b.load(b) : 0;   // 走行抵抗など、回転を止めようとするトルク
     if (state.pushing && b.omega < goal) {
-      b.omega = Math.min(goal, b.omega + (b.torque || p.torque) / b.J * dtp);
+      b.omega = Math.min(goal, Math.max(0, b.omega + ((b.torque || p.torque) - load) / b.J * dtp));
       b.time += dtp;
       if (b.omega >= goal && !b.finished) finish(b);
-    }
+    } else if (!state.pushing && load) b.omega = Math.max(0, b.omega - load / b.J * dtp);   // アクセルを離すと、走行抵抗で遅くなる
     if (b.update) b.update(b, dt);
     b.angle += b.omega * dtp / 20;     // 目で追えるように、1/20 の速さで見せる
+    b.distance = (b.distance || 0) + b.omega * (b.roll || 0.3) * dtp;   // そのホイールで走ったときの距離 (m)
     b.group.rotation.z = -b.angle;
     (b.parts || []).forEach(part => { part.group.rotation.z = -b.angle * part.ratio; });
   });
   if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) el('banner').hidden = true;
   placeTags();
+  if (lesson.strip) drawStrip();
   shownAt += dt;
   if (shownAt > 0.15) { shownAt = 0; showReadout(); }
   controls.update();
@@ -486,6 +542,43 @@ function frame(now) {
 }
 
 // ゴールに着いた: 「よーいドン」の段階では、着いた順番を出す
+// 下の道路（2D）: 各ホイールで走る車が、どれだけ進んだか。距離 = ∫ ω × タイヤの半径 dt
+function drawStrip() {
+  const canvas2 = el('strip');
+  const ratio = window.devicePixelRatio || 1;
+  const w = canvas2.clientWidth, h = canvas2.clientHeight;
+  if (canvas2.width !== Math.round(w * ratio) || canvas2.height !== Math.round(h * ratio)) { canvas2.width = Math.round(w * ratio); canvas2.height = Math.round(h * ratio); }
+  const g = canvas2.getContext('2d');
+  g.setTransform(ratio, 0, 0, ratio, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const lead = Math.max(...bodies.map(b => b.distance || 0));
+  const span = Math.max(10, Math.ceil(lead * 1.15 / 10) * 10);   // 道路に見せる長さ (m)
+  const left = 70, right = w - 150, lane = (h - 18) / bodies.length;
+  const x = d => left + d / span * (right - left);
+  g.font = '11px sans-serif';
+  g.fillStyle = '#dfe6e9';
+  g.textBaseline = 'middle';
+  for (let m = 0; m <= span; m += span / 5) { g.fillRect(x(m), h - 14, 1, 4); g.fillText(`${m} m`, x(m) - 8, h - 5); }
+  const colors = ['#f0a81c', '#7fc8f8', '#c9a24a'];
+  bodies.forEach((b, k) => {
+    const y = 8 + lane * k + lane / 2;
+    g.fillStyle = 'rgba(223, 230, 233, 0.12)';
+    g.fillRect(left, y + 8, right - left, 2);   // 道路の線
+    g.fillStyle = '#dfe6e9';
+    g.fillText(['左', '右', '3'][k], 8, y);
+    // 車（横から見た形）
+    const cx = x(b.distance || 0);
+    g.fillStyle = colors[k];
+    g.fillRect(cx - 26, y - 6, 26, 9);
+    g.fillRect(cx - 19, y - 12, 13, 7);
+    g.fillStyle = '#111';
+    [cx - 21, cx - 5].forEach(wx => { g.beginPath(); g.arc(wx, y + 4, 4, 0, Math.PI * 2); g.fill(); });
+    g.fillStyle = '#dfe6e9';
+    const behind = lead - (b.distance || 0);
+    g.fillText(`${n1(b.distance || 0)} m` + (behind > 0.05 ? `（${n1(behind)} m 遅れ）` : ''), right + 8, y);
+  });
+}
+
 function finish(b) {
   b.finished = true;
   b.place = bodies.filter(x => x.finished).length;
@@ -531,7 +624,9 @@ function renderControls() {
   const l = LESSONS[state.step - 1];
   el('controls').innerHTML = (l.inputs || []).map(([label, key, min, max, step]) =>
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${p[key]}"> <span>${key === 'gear' ? RATIOS[p.gear][0] : p[key]}</span></label>`).join('');
-  el('push').textContent = l.race ? 'よーいドン' : state.step === 8 ? 'シンクロで合わせる' : state.step === 4 || state.step === 7 ? 'アクセルを踏む' : '回す';
+  el('strip').hidden = !l.strip;
+  el('auto').hidden = state.step !== 7;
+  el('push').textContent = l.strip ? '回す' : l.race ? 'よーいドン' : state.step === 8 ? 'シンクロで合わせる' : state.step === 4 || state.step === 7 ? 'アクセルを踏む' : '回す';
   el('stop').textContent = l.brake ? 'ブレーキ' : '止める';
 }
 
@@ -561,9 +656,19 @@ el('prev').addEventListener('click', () => showStep(state.step - 1));
 el('next').addEventListener('click', () => showStep(state.step + 1));
 el('tabs').addEventListener('click', e => { if (e.target.dataset.tab) { state.tab = e.target.dataset.tab; renderLesson(); } });
 el('push').addEventListener('click', () => {
-  bodies.forEach(b => Object.assign(b, { omega: 0, time: 0, finished: false, joined: false, braking: false }));
+  bodies.forEach(b => Object.assign(b, { omega: 0, time: 0, distance: 0, finished: false, joined: false, braking: false }));
   el('banner').hidden = true;
   state.pushing = true;
+});
+// 段階7: 1速から順に、6,000 rpm で1段ずつ上げながら加速する
+el('auto').addEventListener('click', () => {
+  p.gear = 0;
+  build();
+  renderControls();
+  bodies[0].auto = true;
+  el('banner').hidden = true;
+  state.pushing = true;
+  renderLesson();
 });
 el('stop').addEventListener('click', () => {
   state.pushing = false;
