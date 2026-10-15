@@ -410,7 +410,7 @@ function partInfo(part) {
   };
   if (part === 'brake') return {
     title: 'ブレーキ（アウトプット軸）',
-    text: 'アウトプット軸の後ろの端に付けたディスクを、キャリパーがはさんで止めます。アウトプット軸はタイヤといつもつながっているので、ここで止めると車も止まります。図の下の「ブレーキ」で強さを0〜100%で決めます。段階9から効きます。',
+    text: 'アウトプット軸の後ろの端に付けたディスクを、キャリパーがはさんで止めます。アウトプット軸はタイヤといつもつながっているので、ここで止めると車も止まります。図の下の「ブレーキ」で強さを0〜100%で決めます。',
     rows: [
       ['ブレーキの力', 'F = 強さ × 0.8 × m × g', `${n0(sim.brake * 100)}% → ${n0(sim.brake * BRAKE_MAX)} N`],
       ['車の減速度（ブレーキだけ）', 'a = F / m', `${n2(sim.brake * BRAKE_MAX / CAR_MASS)} m/s²（${n2(sim.brake * 0.8)} G）`]
@@ -565,10 +565,8 @@ function renderGearButtons() {
   }
   el('gearButtons').innerHTML = html;
   el('pedalBox').hidden = state.step < STEP_CLUTCH;
-  // ブレーキ: アウトプット軸がある段階から出す。車の動きを計算するのはクラッチの段階からなので、それまでは触れない
-  el('brakeBox').hidden = state.step < STEP_OUTPUT || state.detail || state.clutchDetail;
-  el('brake').disabled = state.step < STEP_CLUTCH;
-  el('brakeBox').title = state.step < STEP_CLUTCH ? '段階9（クラッチ）から効きます。それまでは回転数を決めて回しているためです' : '';
+  // ブレーキ: 車の動きを計算するクラッチの段階（9）からだけ出す
+  el('brakeBox').hidden = state.step < STEP_CLUTCH || state.detail || state.clutchDetail;
   // 入力の方式（エンジン回転数とトルク / 車速）
   const input = (id, name) => `<button type="button" data-input="${id}" class="${state.input === id ? 'current' : ''}">${name}</button>`;
   el('inputMode').innerHTML = input('engine', 'エンジン回転数とトルクで入力') + input('speed', '車速で入力');

@@ -248,9 +248,9 @@ function buildScene() {
   put(gearGeometry(c.z2, A - redUpper, 0.5), 'steel', 'red', flow, -A, RED_Z, counterAngle);
   shaft('shaft:counter', RED_Z - 0.6, state.step === 1 ? RED_Z + 1.5 : endZ - 1.2, -A, flow, counterAngle);
 
-  if (state.step >= STEP_OUTPUT) {
-    shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
-    // ブレーキ: アウトプット軸の後ろの端のディスクを、キャリパーがはさむ
+  if (state.step >= STEP_OUTPUT) shaft('shaft:output', RED_Z + 0.9, endZ, 0, flow, outputAngle);
+  if (state.step >= STEP_CLUTCH) {
+    // ブレーキ（操作できるクラッチの段階から）: アウトプット軸の後ろの端のディスクを、キャリパーがはさむ
     addMark(put(cylinder(0.9, 0.12, 40), 'steel', 'brake', false, 0, endZ - 0.35, outputAngle), 0.9, 0.12);
     brakeCaliper = put(new THREE.BoxGeometry(0.4, 0.35, 0.3), 'key', 'brake', false, 0.75, endZ - 0.35);
   }
