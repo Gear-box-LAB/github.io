@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="エンジンのトルクカーブと出力から、速く走る変速点と燃費のよい走り方を学ぶページ">
+<title>エンジンの性能曲線と変速点 | CAR STUDY LAB</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=STIX+Two+Text:ital@1&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <nav class="buttons sites" aria-label="サイトの切り替え">
+    <a href="index.html">ギヤボックスLAB</a>
+    <a href="car-study.html" class="current">CAR STUDY LAB</a>
+    <span class="crumb">＞ エンジンの性能曲線と変速点　<a href="car-study.html" class="back">テーマを選び直す</a></span>
+  </nav>
+  <nav class="steps" id="steps" aria-label="学ぶ順番"></nav>
+</header>
+
+<main class="bench">
+  <section class="stage">
+    <div class="view3d">
+      <canvas id="chart" aria-label="エンジンの性能曲線と変速点のグラフ"></canvas>
+    </div>
+    <div class="bar">
+      <div class="buttons">
+        <button type="button" id="run" hidden></button>
+      </div>
+      <div class="buttons" id="controls"></div>
+      <p class="readout" id="readout"></p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 id="lessonTitle"></h2>
+    <div class="buttons" id="tabs">
+      <button type="button" data-tab="structure">考え方</button>
+      <button type="button" data-tab="formula">数式</button>
+    </div>
+    <div class="body"><div id="lessonOutput"></div></div>
+    <div class="buttons pager">
+      <button type="button" id="prev">前へ</button>
+      <button type="button" id="next">次へ</button>
+    </div>
+  </section>
+</main>
+
+<script src="study.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>
