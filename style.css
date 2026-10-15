@@ -44,6 +44,9 @@ h1 { font-size: 18px; white-space: nowrap; }
 .results td { padding: 3px 6px; border-color: rgba(223, 230, 233, 0.2); }
 .resultsHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .resultsHead button { font-size: 12px; padding: 0 8px; }
+.splits { margin: 6px 0 2px; gap: 4px; }
+.splits button { font-size: 12px; padding: 2px 8px; }
+.splits button.current { background: var(--power); border-color: var(--power); color: var(--ink); font-weight: 700; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 /* CAR STUDY LAB のテーマ選び */
 .menuPage { height: auto; min-height: 100vh; grid-template-rows: auto 1fr; }

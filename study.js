@@ -162,6 +162,7 @@ function draw() {
 }
 
 function showStep(step) {
+  if (LESSONS.length && lesson().leave) lesson().leave();   // 前の項目の後片付け（加速くらべの表など）
   state.step = Math.min(LESSONS.length, Math.max(1, step));
   state.running = false;
   const l = lesson();

@@ -111,7 +111,7 @@ function build3d() {
   el('hint3d').textContent = {
     car: `車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
     engine: 'ドラッグで向きを変えられます。回転は 1/50 の速さです。橙の矢印の長さがトルクの大きさです。',
-    race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごとです。ドラッグで向きを変えられます。'
+    race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
 }
 
@@ -208,6 +208,7 @@ function buildRace() {
   view.world.add(road);
   for (let x = 0; x <= GOAL; x += 100) {
     box(view.world, 0.4, 0.04, 17, 0xffffff, x, 0, 0);
+    if (x % 500) continue;   // 距離の札は 500 m ごと
     const tag = label(x === GOAL ? `ゴール ${x} m` : `${x} m`);
     tag.scale.set(8, 1, 1);
     tag.position.set(x, 0.8, -10);
@@ -223,7 +224,7 @@ function buildRace() {
   });
   road.userData.stripes.visible = false;
   for (let k = 0; k < 17; k++) box(view.world, 1, 0.05, 1, k % 2 ? 0x111111 : 0xffffff, GOAL + 0.5, 0, k - 8);   // ゴールの白黒の線
-  view.items = { cars, lead: 0, shown: -1 };
+  view.items = { cars, lead: 0 };
 }
 function updateRace() {
   const it = view.items, { camera, controls } = view.three;
@@ -235,24 +236,11 @@ function updateRace() {
     tag.position.set(car.position.x, 1.9, car.position.z);
     lead = Math.max(lead, Math.min(r.x, GOAL));
   });
-  showResults();
   const move = lead - it.lead;   // 先頭の車について行く
   it.lead = lead;
   camera.position.x += move;
   controls.target.x += move;
   controls.update();
-}
-
-// 400 m の結果の表（右上）。1位がゴールしてから、着いた順に行を足す
-function showResults() {
-  const it = view.items, done = racers.filter(r => r.tGoal !== null).sort((a, b) => a.tGoal - b.tGoal || (b.best ? 1 : 0) - (a.best ? 1 : 0));   // 同じタイムなら最適な点を上に
-  if (done.length === 0) view.closed = false;   // 新しいレースが始まったら、閉じた表をまた出せるようにする
-  el('results').hidden = view.closed || done.length === 0;
-  el('hint3d').hidden = !el('results').hidden;   // 表を出す間は、左上の説明を隠す（スマホで重ならないように）
-  if (done.length === it.shown) return;
-  it.shown = done.length;
-  el('resultsBody').innerHTML = done.map((r, k) => `<tr><td>${k + 1}位</td><td><span class="swatch" style="background:${r.color}"></span>${r.short}</td>`
-    + `<td>${n3(r.tGoal)} 秒</td><td>${k ? (r.tGoal - done[k - 1].tGoal < 0.0005 ? '同着' : `+${n3(r.tGoal - done[k - 1].tGoal)} 秒`) : '−'}</td></tr>`).join('');
 }
 
 // ---------- 図と3Dの切り替え ----------
@@ -262,7 +250,6 @@ function setView(want) {
   view.mode = l.scene ? want : 'chart';
   el('chart').hidden = view.mode !== 'chart';
   el('scene3d').hidden = el('hint3d').hidden = view.mode !== '3d';
-  if (el('results')) el('results').hidden = true;   // 結果の表は、加速くらべの 3D のときだけ出す
   el('show3d').disabled = !l.scene;
   el('show3d').title = l.scene ? '' : 'ここは図だけです';
   el('showChart').classList.toggle('current', view.mode === 'chart');
