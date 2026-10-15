@@ -21,11 +21,11 @@ let racers = [];
 
 function newRacers() {
   racers = [
-    { name: '3,500 rpm で変速（早め）', color: '#8fd694', shiftAt: () => 3500 },
-    { name: `${P.shift} rpm で変速（スライダー）`, color: '#f0a81c', shiftAt: () => P.shift },
-    { name: '7,000 rpm で変速（レッドゾーンまで）', color: '#e57373', shiftAt: () => REDLINE },
-    { name: '交わる所で変速（最適）', color: '#7fc8f8', shiftAt: g => bestShift(g).rpm }
-  ].map(r => Object.assign(r, { t: 0, v: 0, g: 0, wait: 0, t100: null, points: [[0, 0]] }));
+    { name: '3,500 rpm で変速（早め）', short: '3,500', color: '#8fd694', shiftAt: () => 3500 },
+    { name: `${P.shift} rpm で変速（スライダー）`, short: String(P.shift), color: '#f0a81c', shiftAt: () => P.shift },
+    { name: '7,000 rpm で変速（レッドゾーンまで）', short: '7,000', color: '#e57373', shiftAt: () => REDLINE },
+    { name: '交わる所で変速（最適）', short: '最適', color: '#7fc8f8', shiftAt: g => bestShift(g).rpm }
+  ].map(r => Object.assign(r, { t: 0, x: 0, v: 0, g: 0, wait: 0, t100: null, points: [[0, 0]] }));
 }
 
 // 1台を dt 秒進める
@@ -40,13 +40,14 @@ function stepRacer(r, dt) {
   }
   const a = (force - resistTotal(r.v)) / (CAR.mass * (1 + delta(r.g)));
   r.v = Math.max(0, Math.min(r.v + a * dt * 3.6, speedAt(r.g, REDLINE)));
+  r.x += r.v / 3.6 * dt;   // 走った距離 (m)
   if (r.t100 === null && r.v >= 100) r.t100 = r.t;
   if (Math.round(r.t * 20) !== Math.round((r.t - dt) * 20)) r.points.push([r.t, r.v]);
 }
 
 const LESSONS_ENGINE = [
   {
-    level: 'hs', name: 'トルクカーブ', title: 'エンジンのトルクは、回転数で変わる',
+    name: 'トルクカーブ', title: 'エンジンのトルクは、回転数で変わる',
     controls: [['エンジン回転数 (rpm)', 'rpm', 1000, 7000, 100]],
     text: [
       'エンジンが軸を回す力（トルク）は、いつも同じではありません。回転数ごとのトルクを線で描いたものを「トルクカーブ」（性能曲線）と言います。',
@@ -69,10 +70,12 @@ const LESSONS_ENGINE = [
       vline: P.rpm,
       dots: [{ x: P.rpm, y: torqueAt(P.rpm), color: '#f0a81c', label: `${n0(torqueAt(P.rpm))} N·m` }]
     }),
+    scene: 'engine',
+    engine3d: () => ({ rpm: P.rpm, torque: torqueAt(P.rpm), text: `${P.rpm} rpm　トルク ${n0(torqueAt(P.rpm))} N·m` }),
     readout: () => `${P.rpm} rpm のトルク: ${n0(torqueAt(P.rpm))} N·m`
   },
   {
-    level: 'hs', name: '出力', title: '出力（パワー）は、トルク × 回転の速さ',
+    name: '出力', title: '出力（パワー）は、トルク × 回転の速さ',
     controls: [['エンジン回転数 (rpm)', 'rpm', 1000, 7000, 100]],
     text: [
       '出力（パワー、仕事率）は、トルクと回転の速さを掛けた値です。単位はキロワット (kW) です。',
@@ -98,10 +101,12 @@ const LESSONS_ENGINE = [
         dots: [{ x: pr, y: pp, color: '#7fc8f8', label: `最大出力 ${n0(pp)} kW` }, { x: P.rpm, y: powerAt(P.rpm), color: '#7fc8f8' }]
       };
     },
+    scene: 'engine',
+    engine3d: () => ({ rpm: P.rpm, torque: torqueAt(P.rpm), text: `${P.rpm} rpm　出力 ${n1(powerAt(P.rpm))} kW` }),
     readout: () => `${P.rpm} rpm: トルク ${n0(torqueAt(P.rpm))} N·m、出力 ${n1(powerAt(P.rpm))} kW（${n0(powerAt(P.rpm) / 0.735)} PS）`
   },
   {
-    level: 'pro', name: '変速ののこぎり図', title: '変速すると、回転数はステップ比の分だけ下がる',
+    name: '変速ののこぎり図', title: '変速すると、回転数はステップ比の分だけ下がる',
     controls: [['変速する回転数 (rpm)', 'shift', 3000, 7000, 100]],
     text: [
       '横軸を車速、縦軸をエンジン回転数にすると、各段は原点から伸びる直線になります。傾きが変速比です。',
@@ -132,12 +137,12 @@ const LESSONS_ENGINE = [
     readout: () => `${P.shift} rpm で変速: 変速後 ` + GEARS.slice(0, -1).map((x, g) => `${GEARS[g + 1][0]} ${n0(P.shift * GEARS[g + 1][1] / x[1])} rpm`).join('、') + '（赤い点線はレッドゾーン 7,000 rpm）'
   },
   {
-    level: 'pro', name: '速く走る変速点', title: '一番速く加速する変速点は、駆動力の線が交わる所',
+    name: '速く走る変速点', title: '一番速く加速する変速点は、駆動力の線が交わる所',
     text: [
       '速く加速したいなら、同じ車速で駆動力が大きい方の段を使えばよいはずです。今の段の駆動力の線が、次の段の線を下回ったら、そこが変速する所です。グラフの白い点が、その交わる所です。',
       '交わる所がなく、今の段の線が最後まで上にあるなら、レッドゾーンまで引っぱって変速するのが一番速くなります。',
       'このエンジンでは、交わる所は 6,600〜7,000 rpm です。最大出力の回転数（6,000 rpm）より少し上で、変速した後の回転数が、トルクの山（4,500 rpm）の近くに落ちるためです。',
-      'では、なぜ「6,000 rpm で上げる」と言われるのか。①最大出力が出る回転数で、そこまで回せば力はほぼ出し切っている。②変速には時間がかかり、レッドゾーンぎりぎりだと、操作が遅れたときに回転が上がりすぎる（エンジンを守る仕組みで燃料が止まる）。③最適な点との差は小さい（次の段階の加速くらべで、0→100 km/h の差は 0.3 秒ほど）。この3つから、余裕を持った目安として使われます。',
+      'では、なぜ「6,000 rpm で上げる」と言われるのか。①最大出力が出る回転数で、そこまで回せば力はほぼ出し切っている。②変速には時間がかかり、レッドゾーンぎりぎりだと、操作が遅れたときに回転が上がりすぎる（エンジンを守る仕組みで燃料が止まる）。③最適な点との差は小さい（Step5 の加速くらべで、0→100 km/h の差は 0.3 秒ほど）。この3つから、余裕を持った目安として使われます。',
       '最適な変速点は、トルクカーブの形と、となりの段との変速比の差で決まります。決まった数字が、どの車でも正しいわけではありません。'
     ],
     symbols: 'F<sub>n</sub>(v): n 段で車速 v のときの駆動力。',
@@ -153,7 +158,7 @@ const LESSONS_ENGINE = [
     readout: () => '最適な変速点: ' + GEARS.slice(0, -1).map((x, g) => `${x[0]}→${GEARS[g + 1][0]} ${n0(bestShift(g).rpm)} rpm`).join('、')
   },
   {
-    level: 'pro', name: '加速くらべ', title: '変速する回転数だけを変えて、0→100 km/h を比べる',
+    name: '加速くらべ', title: '変速する回転数だけを変えて、0→100 km/h を比べる',
     controls: [['橙の車が変速する回転数 (rpm)', 'shift', 3000, 7000, 100]],
     runLabel: 'よーいドン（0 → 160 km/h）',
     reset: newRacers,
@@ -165,17 +170,18 @@ const LESSONS_ENGINE = [
       '1速→2速は変速比の差が大きいので、変速点の違いが大きく効きます。上の段では、差は小さくなります。',
       '変速には 0.3 秒かかり、その間は加速しない、としています。発進は、半クラッチでエンジンを 3,000 rpm に保つ想定です。どちらも説明用の値です。'
     ],
-    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図の段階4と同じ式）。',
+    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図 Step4 と同じ式）。',
     formula: () => racers.map(r => [r.name, '0 → 100 km/h の時間', r.t100 !== null ? `${n2(r.t100)} 秒` : '（まだ着いていない）']),
     chart: () => ({
       xLabel: '時間 (秒)', yLabel: '車速 (km/h)', xMax: 25, xStep: 5, yMax: 180, yStep: 20,
       series: racers.map(r => ({ name: r.name, color: r.color, points: r.points.concat([[r.t, r.v]]) }))
         .concat([{ name: '', color: 'rgba(255,255,255,0.5)', points: [[0, 100], [25, 100]], dash: [4, 4], width: 1 }])
     }),
+    scene: 'race',
     readout: () => racers.map(r => `${r.name}: ${n0(r.v)} km/h（${gearText(r.g)}）` + (r.t100 !== null ? `、0→100 km/h ${n2(r.t100)} 秒` : '')).join('<br>')
   },
   {
-    level: 'pro', name: '燃費と変速点', title: '燃費をよくするなら、トルクに余裕がある範囲で、低い回転（高い段）を使う',
+    name: '燃費と変速点', title: '燃費をよくするなら、トルクに余裕がある範囲で、低い回転（高い段）を使う',
     controls: [['一定で走る車速 (km/h)', 'speed', 20, 160, 5]],
     text: [
       '一定の速さで平らな道を走るときに必要な力は、走行抵抗と同じです。どの段で走っても、タイヤに必要な力と出力は同じです。',

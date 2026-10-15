@@ -17,9 +17,25 @@ function topSpeed(grade, mass, cda) {
 // 余裕駆動力から求める加速度 (m/s²)。回転部分も加速させるので、質量を (1 + δ) 倍にする
 const accelAt = (g, v, grade, mass, cda) => (driveAt(g, v) - resistTotal(v, grade, mass, cda)) / ((mass || CAR.mass) * (1 + delta(g, mass)));
 
+// 3D の矢印（色は図の線と同じ）
+const C = { drive: 0xf0a81c, roll: 0x8fd694, air: 0x7fc8f8, grade: 0xe57373, net: 0xffffff };
+// 今の車速で一番力の出る段（回せる段がなければ -1）
+const bestGear = v => GEARS.reduce((best, x, g) => rpmAt(g, v) >= IDLE && rpmAt(g, v) <= REDLINE && (best < 0 || driveAt(g, v) > driveAt(best, v)) ? g : best, -1);
+// 走行抵抗の3つの矢印（後ろ向きなので −）
+function resistArrows(grade, mass, cda) {
+  const r = resist(P.speed, grade, mass, cda);
+  return [['転がり抵抗', -r.roll, C.roll, 'front'], ['空気抵抗', -r.air, C.air, 'nose'], ['勾配抵抗', -r.grade, C.grade, 'roof']];
+}
+// 駆動力（一番力の出る段）+ 走行抵抗 + 余裕駆動力
+function allArrows(grade, mass) {
+  const g = bestGear(P.speed), f = g < 0 ? 0 : driveAt(g, P.speed);
+  return [[g < 0 ? '駆動力' : `駆動力（${gearText(g)}）`, f, C.drive, 'rear']].concat(resistArrows(grade, mass))
+    .concat([['余裕駆動力', f - resistTotal(P.speed, grade, mass), C.net, 'top']]);
+}
+
 const LESSONS_DRIVE = [
   {
-    level: 'hs', name: '駆動力', title: 'タイヤが地面を押す力は、エンジンのトルク × ギヤ比で決まる',
+    name: '駆動力', title: 'タイヤが地面を押す力は、エンジンのトルク × ギヤ比で決まる',
     controls: [['段', 'gear', 0, 5, 1, gearText], ['車速 (km/h)', 'speed', 0, 220, 1]],
     text: [
       '車を前に進めるのは、タイヤが地面を後ろへ押す力です。これを「駆動力」と言います。',
@@ -42,10 +58,12 @@ const LESSONS_DRIVE = [
       vline: P.speed,
       dots: rpmAt(P.gear, P.speed) <= REDLINE && rpmAt(P.gear, P.speed) >= IDLE ? [{ x: P.speed, y: driveAt(P.gear, P.speed), color: COLORS[P.gear], label: `${n0(driveAt(P.gear, P.speed))} N` }] : []
     }),
+    scene: 'car',
+    arrows: () => { const n = rpmAt(P.gear, P.speed); return [['駆動力', n >= IDLE && n <= REDLINE ? driveAt(P.gear, P.speed) : 0, C.drive, 'rear']]; },
     readout: () => `${gearText(P.gear)}、時速 ${P.speed} km: エンジン ${n0(rpmAt(P.gear, P.speed))} rpm、駆動力 ${n0(driveAt(P.gear, P.speed))} N（${gearText(P.gear)}で出せる車速 ${n0(speedAt(P.gear, IDLE))}〜${n0(speedAt(P.gear, REDLINE))} km/h）`
   },
   {
-    level: 'hs', name: '走行抵抗', title: '車を止めようとする力は、転がり、空気、坂道の3つ',
+    name: '走行抵抗', title: '車を止めようとする力は、転がり、空気、坂道の3つ',
     controls: [['坂道の勾配 (%)', 'grade', 0, 20, 1], ['車の重さ (kg)', 'mass', 800, 2000, 50], ['Cd × 前面投影面積 (m²)', 'cda', 0.4, 1.2, 0.05], ['車速 (km/h)', 'speed', 0, 220, 1]],
     text: [
       '走っている車には、止めようとする力がいつもかかります。これを「走行抵抗」と言います。',
@@ -75,10 +93,12 @@ const LESSONS_DRIVE = [
       vline: P.speed,
       dots: [{ x: P.speed, y: resistTotal(P.speed, P.grade, P.mass, P.cda), label: `${n0(resistTotal(P.speed, P.grade, P.mass, P.cda))} N` }]
     }),
+    scene: 'car',
+    arrows: () => resistArrows(P.grade, P.mass, P.cda),
     readout: () => { const r = resist(P.speed, P.grade, P.mass, P.cda), t = r.roll + r.air + r.grade; return `時速 ${P.speed} km: 転がり ${n0(r.roll)} N、空気 ${n0(r.air)} N、勾配 ${n0(r.grade)} N、合計 ${n0(t)} N（空気の割合 ${t ? n0(r.air / t * 100) : 0}%）`; }
   },
   {
-    level: 'pro', name: '駆動力線図', title: '駆動力と走行抵抗を重ねると、車の性能が1枚でわかる',
+    name: '駆動力線図', title: '駆動力と走行抵抗を重ねると、車の性能が1枚でわかる',
     controls: [['車速 (km/h)', 'speed', 0, 240, 1]],
     text: [
       '全段の駆動力と、平らな道の走行抵抗（白い線）を1枚に重ねた図を「駆動力線図」（走行性能曲線）と言います。車の開発で、性能を話すときの基本の図です。',
@@ -106,10 +126,12 @@ const LESSONS_DRIVE = [
         dots: [{ x: top.v, y: resistTotal(top.v), label: `最高速 ${n0(top.v)} km/h` }]
       };
     },
+    scene: 'car',
+    arrows: () => allArrows(0, CAR.mass),
     readout: () => `時速 ${P.speed} km の駆動力: ` + GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n0(driveAt(g, P.speed))} N` : `${x[0]} −`).join('、') + ` ／ 走行抵抗 ${n0(resistTotal(P.speed))} N`
   },
   {
-    level: 'pro', name: '余裕駆動力と加速', title: '余裕駆動力 ÷ 重さ が加速度。回る部品の分だけ重く見える',
+    name: '余裕駆動力と加速', title: '余裕駆動力 ÷ 重さ が加速度。回る部品の分だけ重く見える',
     controls: [['車速 (km/h)', 'speed', 0, 240, 1], ['車の重さ (kg)', 'mass', 800, 2000, 50]],
     text: [
       '余裕駆動力（駆動力 − 走行抵抗）で車を加速させます。加速度は、余裕駆動力を重さで割った値です。',
@@ -128,11 +150,13 @@ const LESSONS_DRIVE = [
       series: GEARS.map((x, g) => ({ name: x[0], color: COLORS[g], points: driveLine(g).map(([v]) => [v, accelAt(g, v, 0, P.mass) / G]) })),
       vline: P.speed
     }),
+    scene: 'car',
+    arrows: () => allArrows(0, P.mass),
     readout: () => `時速 ${P.speed} km、${P.mass} kg の加速度: ` + GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n2(accelAt(g, P.speed, 0, P.mass) / G)} G` : `${x[0]} −`).join('、')
   },
   {
-    level: 'pro', name: '坂道', title: '坂道では走行抵抗の線が上がり、最高速が下がり、使える段が減る',
-    controls: [['坂道の勾配 (%)', 'grade', 0, 30, 1], ['車の重さ (kg)', 'mass', 800, 2000, 50]],
+    name: '坂道', title: '坂道では走行抵抗の線が上がり、最高速が下がり、使える段が減る',
+    controls: [['坂道の勾配 (%)', 'grade', 0, 30, 1], ['車の重さ (kg)', 'mass', 800, 2000, 50], ['車速 (km/h)', 'speed', 0, 240, 1]],
     text: [
       '坂道では、勾配抵抗の分だけ走行抵抗の線が上に平行移動します。駆動力の線は変わりません。',
       'その結果、交わる所（最高速）が左へずれます。上の段の線は、走行抵抗の線より下になり、使えなくなります。坂道でシフトダウンするのは、このためです。',
@@ -164,6 +188,8 @@ const LESSONS_DRIVE = [
         dots: top.v > 0 ? [{ x: top.v, y: resistTotal(top.v, P.grade, P.mass), label: `最高速 ${n0(top.v)} km/h` }] : []
       };
     },
+    scene: 'car',
+    arrows: () => allArrows(P.grade, P.mass),
     readout: () => { const top = topSpeed(P.grade, P.mass); return `勾配 ${P.grade}%、${P.mass} kg: ` + (top.v > 0 ? `最高速 約 ${n0(top.v)} km/h（${gearText(top.g)}）` : 'どの段でも、この坂は登れません'); }
   }
 ];

@@ -14,7 +14,6 @@ const n2 = v => v.toFixed(2);
 const n3 = v => v.toFixed(3);
 const sub = (letter, mark) => `${letter}<sub>${mark}</sub>`;
 const RPM = 2 * Math.PI / 60;     // rpm → rad/s
-const LEVELS = { jh: '中学生', hs: '高校生', pro: '社会人' };
 
 // 入力できる値（段階ごとに使うものが違う）
 const p = {
@@ -102,7 +101,7 @@ function flywheel(group, heavyRim) {
 // ---------- 段階 ----------
 const LESSONS = [
   {
-    level: 'jh', name: '動かしにくさ', title: '重いホイールほど、回し始めにくく、止めにくい',
+    name: '動かしにくさ', title: '重いホイールほど、回し始めにくく、止めにくい',
     strip: true,   // 下の道路に、このホイールで走る車を出す
     bodies: () => [
       { name: '鍛造アルミホイール 6 kg', J: 0.5 * 6 * 0.2 ** 2, goal: 1000, tagY: -0.32, build: g => wheel(g, 0.22, COLOR.alu, 5) },
@@ -121,7 +120,7 @@ const LESSONS = [
     ]
   },
   {
-    level: 'jh', name: '形で変わる', title: '同じ重さでも、外側に重さがあるほど回しにくい',
+    name: '形で変わる', title: '同じ重さでも、外側に重さがあるほど回しにくい',
     strip: true,   // 下の道路に、このホイールで走る車を出す
     bodies: () => [
       { name: '中心に重さ（軽量フライホイール型）8 kg', J: 0.5 * 8 * 0.07 ** 2 + 0.002, goal: 3000, tagY: -0.25, build: g => flywheel(g, false) },
@@ -140,7 +139,7 @@ const LESSONS = [
     ]
   },
   {
-    level: 'hs', name: '半径の2乗', title: 'タイヤを大きくすると、半径の2乗で回しにくくなる',
+    name: '半径の2乗', title: 'タイヤを大きくすると、半径の2乗で回しにくくなる',
     strip: true,   // 下の道路に、このホイールで走る車を出す
     inputs: [['右のタイヤの半径 (m)', 'tire', 0.28, 0.42, 0.01]],
     bodies: () => [
@@ -160,7 +159,7 @@ const LESSONS = [
     ]
   },
   {
-    level: 'hs', name: 'トルクと角加速度', title: 'トルクが大きいほど、エンジンは速く吹け上がる',
+    name: 'トルクと角加速度', title: 'トルクが大きいほど、エンジンは速く吹け上がる',
     inputs: [['エンジンのトルク (N·m)', 'throttle', 10, 120, 5]],
     bodies: () => [{
       name: 'クランク + フライホイール', J: 0.15, torque: p.throttle, goal: REDLINE, x: -0.25, tagY: -0.25,
@@ -187,7 +186,7 @@ const LESSONS = [
     }
   },
   {
-    level: 'hs', name: '回転のエネルギー', title: '回っているタイヤのエネルギーは、ブレーキで熱になる',
+    name: '回転のエネルギー', title: '回っているタイヤのエネルギーは、ブレーキで熱になる',
     bodies: () => [{
       name: 'タイヤ + ホイール + ブレーキディスク', J: 1.0, torque: 40, goal: 1000,
       build: g => {
@@ -226,7 +225,7 @@ const LESSONS = [
     }
   },
   {
-    level: 'pro', name: 'ギヤ越しのイナーシャ', title: '減速ギヤの先のタイヤは、ギヤ比の2乗だけ軽く見える',
+    name: 'ギヤ越しのイナーシャ', title: '減速ギヤの先のタイヤは、ギヤ比の2乗だけ軽く見える',
     race: true,
     inputs: [['ギヤ比 i（タイヤが i 倍遅く回る）', 'ratio', 1, 6, 0.5]],
     bodies: () => [
@@ -254,7 +253,7 @@ const LESSONS = [
     ]
   },
   {
-    level: 'pro', name: 'ギヤボックスのイナーシャ', title: 'エンジンから見た車の重さは、段で変わる',
+    name: 'ギヤボックスのイナーシャ', title: 'エンジンから見た車の重さは、段で変わる',
     inputs: [['段', 'gear', 0, 5, 1]],
     bodies: () => [carRig()],
     throttle: true,
@@ -278,7 +277,7 @@ const LESSONS = [
     }
   },
   {
-    level: 'pro', name: 'シンクロと同期時間', title: '回転を合わせる時間は、合わせる側の J で決まる',
+    name: 'シンクロと同期時間', title: '回転を合わせる時間は、合わせる側の J で決まる',
     slowmo: 10,   // 実際は 0.1 秒ほどで終わるので、10倍ゆっくり見せる
     inputs: [['合わせる側の J (kg·m²)', 'syncJ', 0.004, 0.04, 0.002], ['回転差 Δn (rpm)', 'syncDiff', 200, 3000, 100], ['シンクロの摩擦トルク (N·m)', 'syncT', 5, 40, 1]],
     bodies: () => [syncRig()],
@@ -612,12 +611,8 @@ new ResizeObserver(() => {
 
 // ---------- 画面 ----------
 function renderSteps() {
-  let group = '';
-  el('steps').innerHTML = LESSONS.map((l, i) => {
-    const head = l.level !== group ? `<span class="group">${LEVELS[l.level]}</span>` : '';
-    group = l.level;
-    return head + `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1} ${l.name}</button>`;
-  }).join('');
+  el('steps').innerHTML = LESSONS.map((l, i) =>
+    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">Step${i + 1} ${l.name}</button>`).join('');
 }
 
 function renderControls() {
@@ -632,7 +627,7 @@ function renderControls() {
 
 function renderLesson() {
   const l = LESSONS[state.step - 1];
-  el('lessonTitle').textContent = `${l.title}（${LEVELS[l.level]}）`;
+  el('lessonTitle').textContent = `Step${state.step}　${l.title}`;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')

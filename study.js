@@ -122,7 +122,6 @@ const driveLine = g => sample(speedAt(g, REDLINE), v => driveAt(g, v), 1).filter
 // ---------- 段階の切り替え（drive.js / engine.js から呼ぶ） ----------
 let LESSONS = [];
 const state = { step: 1, tab: 'structure', running: false };
-const LEVELS = { hs: '高校生', pro: '社会人' };
 
 function startCourse(lessons) {
   LESSONS = lessons;
@@ -137,6 +136,8 @@ function startCourse(lessons) {
     renderLesson();
   });
   el('run').addEventListener('click', () => { const l = lesson(); if (l.start) { l.start(); state.running = true; } });
+  el('showChart').addEventListener('click', () => { setView('chart'); draw(); });
+  el('show3d').addEventListener('click', () => setView('3d'));
   new ResizeObserver(draw).observe(el('chart'));
   showStep(1);
   let last = performance.now();
@@ -144,6 +145,7 @@ function startCourse(lessons) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (state.running) { state.running = lesson().tick(dt); draw(); if (!state.running) renderLesson(); }
+    frame3d(dt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -154,7 +156,7 @@ const valueText = key => { const c = lesson().controls.find(x => x[1] === key); 
 
 function draw() {
   const l = lesson();
-  drawChart(l.chart());
+  if (view.mode === 'chart') drawChart(l.chart());
   el('readout').innerHTML = l.readout ? l.readout() : '';
 }
 
@@ -162,23 +164,20 @@ function showStep(step) {
   state.step = Math.min(LESSONS.length, Math.max(1, step));
   state.running = false;
   const l = lesson();
-  let group = '';
-  el('steps').innerHTML = LESSONS.map((x, i) => {
-    const head = x.level !== group ? `<span class="group">${LEVELS[x.level]}</span>` : '';
-    group = x.level;
-    return head + `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1} ${x.name}</button>`;
-  }).join('');
+  el('steps').innerHTML = LESSONS.map((x, i) =>
+    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">Step${i + 1} ${x.name}</button>`).join('');
   el('controls').innerHTML = (l.controls || []).map(([label, key, min, max, step]) =>
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
   el('run').textContent = l.runLabel || '';
   if (l.reset) l.reset();
+  setView(view.want);
   renderLesson();
 }
 
 function renderLesson() {
   const l = lesson();
-  el('lessonTitle').textContent = `${l.title}（${LEVELS[l.level]}）`;
+  el('lessonTitle').textContent = `Step${state.step}　${l.title}`;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')
