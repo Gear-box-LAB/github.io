@@ -612,7 +612,7 @@ new ResizeObserver(() => {
 // ---------- 画面 ----------
 function renderSteps() {
   el('steps').innerHTML = LESSONS.map((l, i) =>
-    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">Step${i + 1} ${l.name}</button>`).join('');
+    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1}. ${l.name}</button>`).join('');
 }
 
 function renderControls() {
@@ -627,7 +627,7 @@ function renderControls() {
 
 function renderLesson() {
   const l = LESSONS[state.step - 1];
-  el('lessonTitle').textContent = `Step${state.step}　${l.title}`;
+  el('lessonTitle').textContent = `${state.step}. ${l.title}`;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')

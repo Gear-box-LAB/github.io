@@ -165,7 +165,7 @@ function showStep(step) {
   state.running = false;
   const l = lesson();
   el('steps').innerHTML = LESSONS.map((x, i) =>
-    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">Step${i + 1} ${x.name}</button>`).join('');
+    `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1}. ${x.name}</button>`).join('');
   el('controls').innerHTML = (l.controls || []).map(([label, key, min, max, step]) =>
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
@@ -177,7 +177,7 @@ function showStep(step) {
 
 function renderLesson() {
   const l = lesson();
-  el('lessonTitle').textContent = `Step${state.step}　${l.title}`;
+  el('lessonTitle').textContent = `${state.step}. ${l.title}`;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')

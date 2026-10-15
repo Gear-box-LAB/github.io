@@ -17,15 +17,16 @@ function bestShift(g) {
 // ---------- 段階5: 加速くらべ（変速する回転数だけが違う4台） ----------
 const LAUNCH_RPM = 3000;   // 発進のとき、半クラッチで保つ回転数
 const SHIFT_TIME = 0.3;    // 変速にかかる時間（この間は駆動力 0）
+const GOAL = 400;          // ゴールまでの距離 (m)
 let racers = [];
 
 function newRacers() {
   racers = [
-    { name: '3,500 rpm で変速（早め）', short: '3,500', color: '#8fd694', shiftAt: () => 3500 },
-    { name: `${P.shift} rpm で変速（スライダー）`, short: String(P.shift), color: '#f0a81c', shiftAt: () => P.shift },
-    { name: '7,000 rpm で変速（レッドゾーンまで）', short: '7,000', color: '#e57373', shiftAt: () => REDLINE },
-    { name: '交わる所で変速（最適）', short: '最適', color: '#7fc8f8', shiftAt: g => bestShift(g).rpm }
-  ].map(r => Object.assign(r, { t: 0, x: 0, v: 0, g: 0, wait: 0, t100: null, points: [[0, 0]] }));
+    { name: '3,500 rpm で変速（早め）', short: '3,500 rpm', color: '#8fd694', shiftAt: () => 3500 },
+    { name: `${P.shift} rpm で変速（スライダー）`, short: `${P.shift} rpm`, color: '#f0a81c', shiftAt: () => P.shift },
+    { name: '7,000 rpm で変速（レッドゾーンまで）', short: '7,000 rpm', color: '#e57373', shiftAt: () => REDLINE },
+    { name: '交わる所で変速（最適）', short: '最適な点', color: '#7fc8f8', shiftAt: g => bestShift(g).rpm }
+  ].map(r => Object.assign(r, { t: 0, x: 0, v: 0, g: 0, wait: 0, t100: null, tGoal: null, points: [[0, 0]] }));
 }
 
 // 1台を dt 秒進める
@@ -42,6 +43,7 @@ function stepRacer(r, dt) {
   r.v = Math.max(0, Math.min(r.v + a * dt * 3.6, speedAt(r.g, REDLINE)));
   r.x += r.v / 3.6 * dt;   // 走った距離 (m)
   if (r.t100 === null && r.v >= 100) r.t100 = r.t;
+  if (r.x >= GOAL) r.tGoal = r.t;   // ゴール。ここで止まる
   if (Math.round(r.t * 20) !== Math.round((r.t - dt) * 20)) r.points.push([r.t, r.v]);
 }
 
@@ -142,7 +144,7 @@ const LESSONS_ENGINE = [
       '速く加速したいなら、同じ車速で駆動力が大きい方の段を使えばよいはずです。今の段の駆動力の線が、次の段の線を下回ったら、そこが変速する所です。グラフの白い点が、その交わる所です。',
       '交わる所がなく、今の段の線が最後まで上にあるなら、レッドゾーンまで引っぱって変速するのが一番速くなります。',
       'このエンジンでは、交わる所は 6,600〜7,000 rpm です。最大出力の回転数（6,000 rpm）より少し上で、変速した後の回転数が、トルクの山（4,500 rpm）の近くに落ちるためです。',
-      'では、なぜ「6,000 rpm で上げる」と言われるのか。①最大出力が出る回転数で、そこまで回せば力はほぼ出し切っている。②変速には時間がかかり、レッドゾーンぎりぎりだと、操作が遅れたときに回転が上がりすぎる（エンジンを守る仕組みで燃料が止まる）。③最適な点との差は小さい（Step5 の加速くらべで、0→100 km/h の差は 0.3 秒ほど）。この3つから、余裕を持った目安として使われます。',
+      'では、なぜ「6,000 rpm で上げる」と言われるのか。①最大出力が出る回転数で、そこまで回せば力はほぼ出し切っている。②変速には時間がかかり、レッドゾーンぎりぎりだと、操作が遅れたときに回転が上がりすぎる（エンジンを守る仕組みで燃料が止まる）。③最適な点との差は小さい（5. 加速くらべで、0→100 km/h の差は 0.3 秒ほど）。この3つから、余裕を持った目安として使われます。',
       '最適な変速点は、トルクカーブの形と、となりの段との変速比の差で決まります。決まった数字が、どの車でも正しいわけではありません。'
     ],
     symbols: 'F<sub>n</sub>(v): n 段で車速 v のときの駆動力。',
@@ -158,27 +160,27 @@ const LESSONS_ENGINE = [
     readout: () => '最適な変速点: ' + GEARS.slice(0, -1).map((x, g) => `${x[0]}→${GEARS[g + 1][0]} ${n0(bestShift(g).rpm)} rpm`).join('、')
   },
   {
-    name: '加速くらべ', title: '変速する回転数だけを変えて、0→100 km/h を比べる',
+    name: '加速くらべ', title: '変速する回転数だけを変えて、400 m のタイムを比べる',
     controls: [['橙の車が変速する回転数 (rpm)', 'shift', 3000, 7000, 100]],
-    runLabel: 'よーいドン（0 → 160 km/h）',
+    runLabel: 'よーいドン（400 m）',
     reset: newRacers,
     start: newRacers,
-    tick: dt => { racers.forEach(r => { for (let k = 0; k < 5; k++) if (r.v < 160 && r.t < 30) stepRacer(r, dt / 5); }); return racers.some(r => r.v < 160 && r.t < 30); },
+    tick: dt => { racers.forEach(r => { for (let k = 0; k < 5; k++) if (r.tGoal === null && r.t < 40) stepRacer(r, dt / 5); }); return racers.some(r => r.tGoal === null && r.t < 40); },
     text: [
-      '同じ車、同じエンジンで、変速する回転数だけを変えた4台を、同時に発進させます。「よーいドン」を押してください。グラフは、横軸が時間、縦軸が車速です。',
-      '早めに変速する緑の車は、変速後の回転数が低く、トルクの小さい所を使うので遅れます。最適な点（青）で変速する車が一番速く、橙の車はスライダーで変速する回転数を変えられます。',
+      '同じ車、同じエンジンで、変速する回転数だけを変えた4台を、同時に発進させ、400 m 先のゴールまでのタイムを比べます（ゼロヨン）。「よーいドン」を押してください。グラフは、横軸が時間、縦軸が車速です。3D にすると、4台が走る様子と、ゴールした順の結果の表が見られます。',
+      '早めに変速する緑の車は、変速後の回転数が低く、トルクの小さい所を使うので遅れます。最適な点（青）とレッドゾーンまで回す車（赤）がほぼ同着で速く、6,000 rpm（橙）は 0.3 秒ほど遅れます。橙の車は、スライダーで変速する回転数を変えられます。',
       '1速→2速は変速比の差が大きいので、変速点の違いが大きく効きます。上の段では、差は小さくなります。',
       '変速には 0.3 秒かかり、その間は加速しない、としています。発進は、半クラッチでエンジンを 3,000 rpm に保つ想定です。どちらも説明用の値です。'
     ],
-    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図 Step4 と同じ式）。',
-    formula: () => racers.map(r => [r.name, '0 → 100 km/h の時間', r.t100 !== null ? `${n2(r.t100)} 秒` : '（まだ着いていない）']),
+    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図の 4. と同じ式）。',
+    formula: () => racers.map(r => [r.name, '0 → 100 km/h の時間、400 m のタイム', `${r.t100 !== null ? `${n2(r.t100)} 秒` : '−'}、${r.tGoal !== null ? `${n2(r.tGoal)} 秒` : '（まだゴールしていない）'}`]),
     chart: () => ({
       xLabel: '時間 (秒)', yLabel: '車速 (km/h)', xMax: 25, xStep: 5, yMax: 180, yStep: 20,
       series: racers.map(r => ({ name: r.name, color: r.color, points: r.points.concat([[r.t, r.v]]) }))
         .concat([{ name: '', color: 'rgba(255,255,255,0.5)', points: [[0, 100], [25, 100]], dash: [4, 4], width: 1 }])
     }),
     scene: 'race',
-    readout: () => racers.map(r => `${r.name}: ${n0(r.v)} km/h（${gearText(r.g)}）` + (r.t100 !== null ? `、0→100 km/h ${n2(r.t100)} 秒` : '')).join('<br>')
+    readout: () => racers.map(r => `${r.name}: ${n0(r.v)} km/h（${gearText(r.g)}）` + (r.t100 !== null ? `、0→100 km/h ${n2(r.t100)} 秒` : '') + (r.tGoal !== null ? `、400 m ${n2(r.tGoal)} 秒` : '')).join('<br>')
   },
   {
     name: '燃費と変速点', title: '燃費をよくするなら、トルクに余裕がある範囲で、低い回転（高い段）を使う',
@@ -206,3 +208,4 @@ const LESSONS_ENGINE = [
 ];
 
 startCourse(LESSONS_ENGINE);
+el('closeResults').addEventListener('click', () => { view.closed = true; el('results').hidden = true; });

@@ -1,5 +1,5 @@
 // study3d.js: 駆動力線図・エンジンのページの「3D」表示（図と切り替えて見る）
-// Step に scene があれば、3D に切り替えられる
+// 各項目に scene があれば、3D に切り替えられる
 //   'car'    車と力の矢印。矢印は lesson.arrows() → [[名前, 力 N（+ は前向き）, 色, 場所]]。坂は P.grade、車速は P.speed
 //   'engine' 4気筒のクランクとピストン。lesson.engine3d() → { rpm, torque, text }
 //   'race'   加速くらべの4台（engine.js の racers）
@@ -94,7 +94,7 @@ function makeRoad(width, length, from) {
   return road;
 }
 
-// ---------- Step ごとに組み立てる ----------
+// ---------- 項目ごとに組み立てる ----------
 function build3d() {
   const l = lesson();
   const { scene, camera, controls } = view.three;
@@ -109,7 +109,7 @@ function build3d() {
   controls.target.set(...cam[1]);
   controls.update();
   el('hint3d').textContent = {
-    car: `ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
+    car: `車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
     engine: 'ドラッグで向きを変えられます。回転は 1/50 の速さです。橙の矢印の長さがトルクの大きさです。',
     race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
@@ -136,12 +136,14 @@ function buildCar() {
 function updateCar(dt) {
   const { tilt, road, car, arrows } = view.items;
   tilt.rotation.z = Math.atan((P.grade || 0) / 100);
+  const s = Math.sqrt((P.mass || CAR.mass) / CAR.mass);   // 重い車ほど大きく見せる（1,000 kg で 1 倍）
+  car.scale.setScalar(s);
   const ms = P.speed / 3.6 / SLOW;
   road.userData.stripes.position.x = (road.userData.stripes.position.x - ms * dt) % 6;
   car.userData.wheels.forEach(w => { w.rotation.z -= ms / CAR.tire * dt; });
   lesson().arrows().forEach(([name, force, , spot], k) => {
     const a = arrows[k], len = force ? 0.5 * Math.sqrt(Math.abs(force) / 100) : 0;
-    const [x, y, z, dy] = SPOTS[spot];
+    const [x, y, z, dy] = SPOTS[spot].map(v => v * s);
     const dir = Math.sign(force) || 1;
     a.arrow.visible = len > 0;
     a.arrow.setDirection(new THREE.Vector3(dir, 0, 0));
@@ -202,11 +204,11 @@ function updateEngine(dt) {
 
 // 加速くらべ: 4本の車線に4台。x は走った距離 (m)
 function buildRace() {
-  const road = makeRoad(14, 1200, -20);
+  const road = makeRoad(14, GOAL + 120, -20);
   view.world.add(road);
-  for (let x = 0; x <= 1000; x += 100) {
+  for (let x = 0; x <= GOAL; x += 100) {
     box(view.world, 0.4, 0.04, 14, 0xffffff, x, 0, 0);
-    const tag = label(`${x} m`);
+    const tag = label(x === GOAL ? `ゴール ${x} m` : `${x} m`);
     tag.scale.set(8, 1, 1);
     tag.position.set(x, 0.8, -8.5);
     view.world.add(tag);
@@ -220,7 +222,8 @@ function buildRace() {
     return { car, tag };
   });
   road.userData.stripes.visible = false;
-  view.items = { cars, lead: 0 };
+  for (let k = 0; k < 14; k++) box(view.world, 1, 0.05, 1, k % 2 ? 0x111111 : 0xffffff, GOAL + 0.5, 0, k - 6.5);   // ゴールの白黒の線
+  view.items = { cars, lead: 0, shown: -1 };
 }
 function updateRace() {
   const it = view.items, { camera, controls } = view.three;
@@ -230,13 +233,26 @@ function updateRace() {
     car.position.x = r.x - 2.1;   // 車の前の端が、走った距離
     car.userData.wheels.forEach(w => { w.rotation.z = -r.x / CAR.tire; });
     tag.position.set(car.position.x, 1.9, car.position.z);
-    lead = Math.max(lead, r.x);
+    lead = Math.max(lead, Math.min(r.x, GOAL));
   });
+  showResults();
   const move = lead - it.lead;   // 先頭の車について行く
   it.lead = lead;
   camera.position.x += move;
   controls.target.x += move;
   controls.update();
+}
+
+// 400 m の結果の表（右上）。1位がゴールしてから、着いた順に行を足す
+function showResults() {
+  const it = view.items, done = racers.filter(r => r.tGoal !== null).sort((a, b) => a.tGoal - b.tGoal);
+  if (done.length === 0) view.closed = false;   // 新しいレースが始まったら、閉じた表をまた出せるようにする
+  el('results').hidden = view.closed || done.length === 0;
+  el('hint3d').hidden = !el('results').hidden;   // 表を出す間は、左上の説明を隠す（スマホで重ならないように）
+  if (done.length === it.shown) return;
+  it.shown = done.length;
+  el('resultsBody').innerHTML = done.map((r, k) => `<tr><td>${k + 1}位</td><td><span class="swatch" style="background:${r.color}"></span>${r.short}</td>`
+    + `<td>${n2(r.tGoal)} 秒</td><td>${k ? `+${n2(r.tGoal - done[k - 1].tGoal)} 秒` : '−'}</td></tr>`).join('');
 }
 
 // ---------- 図と3Dの切り替え ----------
@@ -246,8 +262,9 @@ function setView(want) {
   view.mode = l.scene ? want : 'chart';
   el('chart').hidden = view.mode !== 'chart';
   el('scene3d').hidden = el('hint3d').hidden = view.mode !== '3d';
+  if (el('results')) el('results').hidden = true;   // 結果の表は、加速くらべの 3D のときだけ出す
   el('show3d').disabled = !l.scene;
-  el('show3d').title = l.scene ? '' : 'この Step は図だけです';
+  el('show3d').title = l.scene ? '' : 'ここは図だけです';
   el('showChart').classList.toggle('current', view.mode === 'chart');
   el('show3d').classList.toggle('current', view.mode === '3d');
   if (view.mode === '3d') { if (!view.three) init3d(); build3d(); }
