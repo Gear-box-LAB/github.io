@@ -6,6 +6,7 @@ const el = id => document.getElementById(id);
 const n0 = v => Math.round(v);
 const n1 = v => v.toFixed(1);
 const n2 = v => v.toFixed(2);
+const n3 = v => v.toFixed(3);
 const sub = (letter, mark) => `${letter}<sub>${mark}</sub>`;
 const RPM = 2 * Math.PI / 60;   // rpm → rad/s
 const G = 9.81;
