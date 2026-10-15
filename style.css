@@ -84,6 +84,12 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .view { position: absolute; top: 8px; right: var(--space); justify-content: flex-end; max-width: 48%; }
 .view button { font-size: 12px; padding: 3px 8px; }
 
+/* CAR STUDY LAB: 部品の名前の札と、上の知らせ */
+.tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tag { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-size: 12px; color: #dfe6e9; background: rgba(20, 35, 43, 0.6); padding: 1px 6px; border-radius: 3px; }
+.tag.main { color: var(--ink); background: rgba(240, 168, 28, 0.9); font-weight: 700; }
+.banner { position: absolute; top: 48px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 14px; border-radius: 4px; background: var(--power); color: var(--ink); font-weight: 700; white-space: nowrap; }
+
 /* アウトプット軸のグラフ: PCでは図の右上に、図のおよそ4分の1（幅半分 × 高さ半分）。背景は薄く透かす */
 .graph {
   position: absolute; top: 84px; right: var(--space); z-index: 1;   /* 右上の切り替えボタン（2段）の下に置く */
