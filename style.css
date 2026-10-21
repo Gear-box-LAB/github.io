@@ -188,6 +188,14 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .formula b { font-size: 13px; }
 .math { font-family: var(--font-math); font-style: italic; font-size: 18px; line-height: 1.4; }
 .num { color: var(--sub); font-size: 13px; }
+/* 数式の行をクリックすると、その式ができる考え方を開く（explain.js） */
+.formula.clickable { cursor: pointer; }
+.formula.clickable:hover { background: rgba(29, 95, 168, 0.05); }
+.whyHint { font-size: 12px; color: var(--pick); }
+.why { margin-top: 6px; padding: 8px 10px; border-left: 4px solid var(--power); background: rgba(240, 168, 28, 0.08); font-size: 14px; line-height: 1.7; cursor: auto; }
+.why button { display: block; margin-top: 8px; font-size: 13px; }
+/* 3D の図の、考え方の札（光らせた部品のそば） */
+.tag.whyMark { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; color: var(--ink); background: #ffd54f; font-weight: 700; pointer-events: none; }
 
 /* 入力欄と表 */
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }

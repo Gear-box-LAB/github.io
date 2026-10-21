@@ -33,6 +33,36 @@ function allArrows(grade, mass) {
     .concat([['余裕駆動力', f - resistTotal(P.speed, grade, mass), C.net, 'top']]);
 }
 
+// 数式の考え方（式の行をクリックすると開く）。mark は 3D の図に出す印（study3d.js の setMark）
+const WHY = {
+  rpm: { text: 'タイヤが1回転すると、車は円周 2πr だけ進みます。だからタイヤの回る速さ（rad/s）は「車速 ÷ r」です。エンジンは、それより変速比 i と最終減速比 i<sub>f</sub> を掛けた分だけ速く回ります（ギヤは回転を遅くしてタイヤに伝えるので、タイヤからエンジンへ逆にたどると掛け算になります）。最後に rad/s を rpm に直すため、60 / 2π を掛けます。',
+    mark: { glow: ['wheels'], text: 'タイヤ1回転で 2πr 進む' } },
+  torque: { text: 'エンジンのトルクは回転数で決まります（テーマ「エンジンの性能曲線と変速点」の 1.）。上で求めた回転数を、トルクカーブに当てはめて読みます。アクセル全開のときの値です。' },
+  drive: { text: 'ギヤは、回転を i 倍遅くする代わりに、トルクを i 倍に大きくします（出力は変わりません）。変速機で i 倍、最終減速ギヤで i<sub>f</sub> 倍、途中の摩擦で η 倍（少し減る）になって、タイヤに届きます。タイヤは中心から半径 r の所で地面を押すので、「トルク = 力 × 腕の長さ」を逆にして、力 = トルク ÷ r です。',
+    mark: { glow: ['rear', 'wheels'], text: '力 = タイヤのトルク ÷ 半径 r' } },
+  roll: { text: 'タイヤは転がるとき、地面に押されて少しつぶれ、また元に戻ります。この変形で失うエネルギーが転がり抵抗です。タイヤが路面を押す力が大きいほどよくつぶれるので、その力に比例します。路面を押す力は、重力 m × g のうち路面に垂直な分 m × g × cos θ です。比例の係数 μ<sub>r</sub> は、乗用車のタイヤで 0.01 前後です。',
+    mark: { glow: ['front', 'wheels'], gravity: true, text: '路面を押す力 × μr' } },
+  air: { text: '車は1秒間に「前面の面積 × 車速」の体積の空気を押しのけます。押しのける空気の量が v に比例し、その空気を動かす速さも v に比例するので、力は v² に比例します（運動エネルギー 1/2 × m × v² と同じ形で、ρ は空気 1 m³ の重さです）。Cd は形の良し悪しを表す係数で、流線形ほど小さくなります。',
+    mark: { glow: ['nose', 'body'], text: '前の面で空気を押しのける' } },
+  grade: { text: '重力 m × g は、いつも真下に向きます。坂の上では、これを「坂に沿う向き」と「路面に垂直な向き」の2つに分けて考えます。坂に沿う分 m × g × sin θ が、車を後ろへ引っぱる勾配抵抗です。路面に垂直な分 m × g × cos θ は、タイヤが路面を押す力（転がり抵抗のもと）になります。勾配 % = tan θ × 100 なので、θ = atan(勾配 ÷ 100) です。',
+    mark: { glow: ['roof'], gravity: true, text: '重力を「坂に沿う分」と「垂直な分」に分ける' } },
+  total: { text: '3つの抵抗は、どれも車が進む向きと反対向きの力なので、そのまま足し算できます。一定の速さで走るには、駆動力がこの合計と同じだけ要ります。',
+    mark: { glow: ['front', 'nose', 'roof'], text: '3つとも後ろ向き → 足し算' } },
+  margin: { text: '車にかかる力は、前向きの駆動力と、後ろ向きの走行抵抗です。差し引きして残った力だけが、車を加速させます（運動方程式 F = m × a の F です）。',
+    mark: { glow: ['top'], text: '前向き − 後ろ向き = 加速に使える力' } },
+  top: { text: '駆動力が走行抵抗より大きいうちは、車は速くなり続けます。速くなるほど空気抵抗が増え、駆動力と等しくなった所で加速が止まります。そこが最高速です。その前にエンジンがレッドゾーンに届けば、そこで頭打ちになります。',
+    mark: { glow: ['rear', 'nose'], text: '駆動力 = 走行抵抗 で加速が止まる' } },
+  gearTop: { text: '1つ目の式（回転数 = 車速 ÷ r × i × i<sub>f</sub>）を車速について解き、回転数にレッドゾーンの 7,000 rpm を入れます。変速比の小さい段ほど、同じ回転数で速く走れます。',
+    mark: { glow: ['wheels'], text: '回転数の上限 → 車速の上限' } },
+  delta: { text: '車が速くなるときは、車体だけでなく、エンジンやタイヤの回転も速くしないといけません。回転を速くするのに使うエネルギー 1/2 × J × ω² を、車が進むエネルギー 1/2 × m × v² の形に直すと、J × (i × i<sub>f</sub>)² ÷ r² の重さが車に加わったのと同じになります。エンジンは車速の (i × i<sub>f</sub>) ÷ r 倍で回るので、2乗で効きます。δ は、それを車の重さ m で割った割合です。',
+    mark: { glow: ['wheels'], text: '回る部品も一緒に速くする' } },
+  accel: { text: '運動方程式 F = m × a を、加速度について解くと a = F ÷ m です。力 F には余裕駆動力を、重さ m には回る部品の分を足した m × (1 + δ) を入れます。',
+    mark: { glow: ['top', 'body'], text: '余裕駆動力 ÷ 見かけの重さ' } },
+  g: { text: '1 G は重力加速度 9.81 m/s² です。加速度を 9.81 で割ると、重力の何倍の強さかがわかります。0.3 G は、体重の 3 割の力で背中を押される感じです。' },
+  climb: { text: '各段の最大の駆動力から、転がり抵抗と空気抵抗を引いた残りで、勾配抵抗 m × g × sin θ にちょうど勝てる θ を探します。sin θ = 残りの力 ÷ (m × g) から θ を出し、勾配 % = tan θ × 100 に直します。',
+    mark: { glow: ['rear', 'roof'], gravity: true, text: '駆動力の残り = m × g × sinθ' } }
+};
+
 const LESSONS_DRIVE = [
   {
     name: '駆動力', title: 'タイヤが地面を押す力は、エンジンのトルク × ギヤ比で決まる',
@@ -47,9 +77,9 @@ const LESSONS_DRIVE = [
     formula: () => {
       const g = P.gear, n = rpmAt(g, P.speed);
       return [
-        ['エンジン回転数', `n = v / r × i × ${sub('i', 'f')}（単位を直して）`, `${n0(n)} rpm` + (n > REDLINE || n < IDLE ? '（この段では回せない範囲）' : '')],
-        ['エンジンのトルク', 'T = トルクカーブから読む', `${n0(torqueAt(n))} N·m`],
-        ['駆動力', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} × η / r`, `${n0(torqueAt(n))} × ${GEARS[g][1]} × ${CAR.final} × ${CAR.eff} ÷ ${CAR.tire} = ${n0(driveAt(g, P.speed))} N`]
+        ['エンジン回転数', `n = v / r × i × ${sub('i', 'f')}（単位を直して）`, `${n0(n)} rpm` + (n > REDLINE || n < IDLE ? '（この段では回せない範囲）' : ''), WHY.rpm],
+        ['エンジンのトルク', 'T = トルクカーブから読む', `${n0(torqueAt(n))} N·m`, WHY.torque],
+        ['駆動力', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} × η / r`, `${n0(torqueAt(n))} × ${GEARS[g][1]} × ${CAR.final} × ${CAR.eff} ÷ ${CAR.tire} = ${n0(driveAt(g, P.speed))} N`, WHY.drive]
       ];
     },
     chart: () => ({
@@ -76,10 +106,10 @@ const LESSONS_DRIVE = [
     formula: () => {
       const r = resist(P.speed, P.grade, P.mass, P.cda);
       return [
-        ['転がり抵抗', `${sub('R', 'r')} = ${sub('μ', 'r')} × m × g × cos θ`, `${n0(r.roll)} N`],
-        ['空気抵抗', `${sub('R', 'a')} = 1/2 × ρ × Cd·A × v²`, `1/2 × 1.2 × ${P.cda} × ${n1(P.speed / 3.6)}² = ${n0(r.air)} N`],
-        ['勾配抵抗', `${sub('R', 'g')} = m × g × sin θ`, `${n0(r.grade)} N`],
-        ['走行抵抗の合計', `R = ${sub('R', 'r')} + ${sub('R', 'a')} + ${sub('R', 'g')}`, `${n0(r.roll + r.air + r.grade)} N（時速 ${P.speed} km）`]
+        ['転がり抵抗', `${sub('R', 'r')} = ${sub('μ', 'r')} × m × g × cos θ`, `${n0(r.roll)} N`, WHY.roll],
+        ['空気抵抗', `${sub('R', 'a')} = 1/2 × ρ × Cd·A × v²`, `1/2 × 1.2 × ${P.cda} × ${n1(P.speed / 3.6)}² = ${n0(r.air)} N`, WHY.air],
+        ['勾配抵抗', `${sub('R', 'g')} = m × g × sin θ`, `${n0(r.grade)} N`, WHY.grade],
+        ['走行抵抗の合計', `R = ${sub('R', 'r')} + ${sub('R', 'a')} + ${sub('R', 'g')}`, `${n0(r.roll + r.air + r.grade)} N（時速 ${P.speed} km）`, WHY.total]
       ];
     },
     chart: () => ({
@@ -111,9 +141,9 @@ const LESSONS_DRIVE = [
     formula: () => {
       const top = topSpeed(0);
       return [
-        ['余裕駆動力', `${sub('F', 'd')} − R`, GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n0(driveAt(g, P.speed) - resistTotal(P.speed))} N` : null).filter(Boolean).join('、') || 'この車速を出せる段がない'],
-        ['最高速', `${sub('F', 'd')} = R になる車速（またはレッドゾーン）`, `時速 約 ${n0(top.v)} km（${gearText(top.g)}）`],
-        ['各段の最高車速（レッドゾーン）', 'v = n × 2π / 60 / (i × ' + sub('i', 'f') + ') × r', GEARS.map((x, g) => `${x[0]} ${n0(speedAt(g, REDLINE))}`).join('、') + ' km/h']
+        ['余裕駆動力', `${sub('F', 'd')} − R`, GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n0(driveAt(g, P.speed) - resistTotal(P.speed))} N` : null).filter(Boolean).join('、') || 'この車速を出せる段がない', WHY.margin],
+        ['最高速', `${sub('F', 'd')} = R になる車速（またはレッドゾーン）`, `時速 約 ${n0(top.v)} km（${gearText(top.g)}）`, WHY.top],
+        ['各段の最高車速（レッドゾーン）', 'v = n × 2π / 60 / (i × ' + sub('i', 'f') + ') × r', GEARS.map((x, g) => `${x[0]} ${n0(speedAt(g, REDLINE))}`).join('、') + ' km/h', WHY.gearTop]
       ];
     },
     chart: () => {
@@ -141,9 +171,9 @@ const LESSONS_DRIVE = [
     ],
     symbols: 'a: 加速度、m: 車の重さ、δ: 回転部分の重さの割合、J<sub>e</sub>: エンジン側の慣性モーメント 0.18 kg·m²、J<sub>w</sub>: タイヤ4本の慣性モーメント 4 kg·m²。',
     formula: () => [
-      ['回転部分の重さの割合', `δ = (${sub('J', 'e')} × (i × ${sub('i', 'f')})² + ${sub('J', 'w')}) / (m × r²)`, GEARS.map((x, g) => `${x[0]} ${n2(delta(g, P.mass))}`).join('、')],
-      ['加速度', `a = (${sub('F', 'd')} − R) / (m × (1 + δ))`, GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n2(accelAt(g, P.speed, 0, P.mass) / G)} G` : null).filter(Boolean).join('、') || 'この車速を出せる段がない'],
-      ['G に直す', 'a ÷ 9.81', '0.3 G で、1秒に時速約 10.6 km 速くなる']
+      ['回転部分の重さの割合', `δ = (${sub('J', 'e')} × (i × ${sub('i', 'f')})² + ${sub('J', 'w')}) / (m × r²)`, GEARS.map((x, g) => `${x[0]} ${n2(delta(g, P.mass))}`).join('、'), WHY.delta],
+      ['加速度', `a = (${sub('F', 'd')} − R) / (m × (1 + δ))`, GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n2(accelAt(g, P.speed, 0, P.mass) / G)} G` : null).filter(Boolean).join('、') || 'この車速を出せる段がない', WHY.accel],
+      ['G に直す', 'a ÷ 9.81', '0.3 G で、1秒に時速約 10.6 km 速くなる', WHY.g]
     ],
     chart: () => ({
       xLabel: '車速 (km/h)', yLabel: '加速度 (G)', xMax: 240, xStep: 40, yMax: 0.8, yStep: 0.2,
@@ -173,9 +203,9 @@ const LESSONS_DRIVE = [
         return `${x[0]} ${n0(best)}%`;
       });
       return [
-        ['勾配抵抗', 'R<sub>g</sub> = m × g × sin θ', `${n0(resist(0, P.grade, P.mass).grade)} N（${P.grade}%、${P.mass} kg）`],
-        ['この坂での最高速', `${sub('F', 'd')} = R になる車速`, top.v > 0 ? `時速 約 ${n0(top.v)} km（${gearText(top.g)}）` : 'どの段でも登れない'],
-        ['各段の登坂能力', '最大の駆動力で勝てる、いちばん急な勾配', climb.join('、')]
+        ['勾配抵抗', 'R<sub>g</sub> = m × g × sin θ', `${n0(resist(0, P.grade, P.mass).grade)} N（${P.grade}%、${P.mass} kg）`, WHY.grade],
+        ['この坂での最高速', `${sub('F', 'd')} = R になる車速`, top.v > 0 ? `時速 約 ${n0(top.v)} km（${gearText(top.g)}）` : 'どの段でも登れない', WHY.top],
+        ['各段の登坂能力', '最大の駆動力で勝てる、いちばん急な勾配', climb.join('、'), WHY.climb]
       ];
     },
     chart: () => {

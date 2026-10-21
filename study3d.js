@@ -5,7 +5,7 @@
 //   'race'   加速くらべの4台（engine.js の racers）
 
 const SLOW = 10;   // 動きは 1/10 の速さで見せる（エンジンは 1/50）
-const view = { want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [] };   // want: 選んだ表示、mode: 今の表示
+const view = { want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [], markSpec: null, mark: null };   // markSpec: 数式の考え方の印（explain.js）   // want: 選んだ表示、mode: 今の表示
 
 // ---------- 準備（3D を初めて開いたときに1回） ----------
 function init3d() {
@@ -70,7 +70,7 @@ function setLabel(sprite, text) {
 // 車（前は +x）。タイヤは回る
 function makeCar(color) {
   const car = new THREE.Group();
-  box(car, 4.2, 0.6, 1.7, color, 0, 0.62, 0);
+  car.userData.body = box(car, 4.2, 0.6, 1.7, color, 0, 0.62, 0);
   box(car, 2.2, 0.5, 1.5, 0x22313a, -0.2, 1.17, 0);
   car.userData.wheels = [];
   [-1.3, 1.3].forEach(x => [-0.8, 0.8].forEach(z => {
@@ -113,6 +113,7 @@ function build3d() {
     engine: 'ドラッグで向きを変えられます。回転は 1/50 の速さです。橙の矢印の長さがトルクの大きさです。',
     race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
+  buildMark();
 }
 
 // 車と力の矢印（坂は、道路と車をまとめて傾ける）
@@ -184,7 +185,7 @@ function buildEngine() {
   tag.scale.set(0.4, 0.05, 1);
   tag.position.set(0.05, 0.32, 0);
   g.add(arrow, tag);
-  view.items = { crank, pistons, arrow, tag, angle: 0 };
+  view.items = { crank, fly, pistons, arrow, tag, angle: 0 };
 }
 function updateEngine(dt) {
   const it = view.items, e = lesson().engine3d();
@@ -243,6 +244,86 @@ function updateRace() {
   controls.update();
 }
 
+// ---------- 数式の考え方の印（explain.js の mark） ----------
+// mark = { glow: [光らせる部品], gravity: true なら重力の矢印, text: そばに出す短い札 }
+//   車:       'wheels' タイヤ、'body' 車体、'rear' 'front' 'nose' 'roof' 'top' その場所の力の矢印
+//   エンジン: 'pistons' ピストン、'crank' クランク軸、'flywheel' フライホイール、'torque' トルクの矢印
+function partsOf(name) {
+  const it = view.items;
+  if (view.scene === 'car') {
+    if (name === 'wheels') return it.car.userData.wheels;
+    if (name === 'body') return [it.car.userData.body];
+    return it.arrows.filter(a => a.spot === name && a.arrow.visible).map(a => a.arrow);
+  }
+  if (view.scene === 'engine') return { pistons: it.pistons.map(x => x.piston), crank: [it.crank], flywheel: [it.fly], torque: [it.arrow] }[name] || [];
+  return [];
+}
+
+function setMark(spec) {
+  view.markSpec = spec;
+  if (view.mode === '3d') buildMark();
+}
+
+function buildMark() {
+  if (view.mark) { view.world.remove(view.mark.group); view.mark.arrows.forEach(a => a.setColor(a.userData.color)); view.mark.mats.forEach(m => m.emissive.setRGB(0, 0, 0)); }
+  view.mark = null;
+  const m = view.markSpec;
+  if (!m || view.scene === 'race') return;
+  const group = new THREE.Group();
+  view.world.add(group);
+  const targets = (m.glow || []).flatMap(partsOf);
+  const mats = [], arrows = [];
+  targets.forEach(o => {
+    if (o.setColor) { o.userData.color = o.line.material.color.getHex(); arrows.push(o); return; }   // 力の矢印は、点滅させる
+    o.traverse(x => { if (x.material && x.material.emissive) mats.push(x.material); });             // 部品は、橙色に光らせる
+  });
+  const big = view.scene === 'car';
+  const tag = label(m.text || '', '#ffd54f');
+  tag.scale.set(big ? 3.6 : 0.42, big ? 0.45 : 0.052, 1);
+  group.add(tag);
+  // 重力 m × g（真下）と、そのうち路面を押す分 m × g × cos θ（路面に垂直）
+  const gravity = m.gravity && big ? [0xffffff, 0xffd54f].map(color => {
+    const a = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 1, color, 0.3, 0.22);
+    const t = label('', '#' + new THREE.Color(color).getHexString());
+    t.scale.set(3.2, 0.4, 1);
+    group.add(a, t);
+    return { a, t };
+  }) : null;
+  view.mark = { group, targets, mats, arrows, tag, gravity, time: 0 };
+}
+
+function updateMark(dt) {
+  const mk = view.mark;
+  if (!mk) return;
+  mk.time += dt;
+  const k = 0.5 + 0.5 * Math.sin(mk.time * 6);
+  mk.mats.forEach(m => m.emissive.setRGB(0.8 * k, 0.45 * k, 0));
+  mk.arrows.forEach(a => a.setColor(k > 0.5 ? 0xffffff : a.userData.color));
+  // 札は、光らせた部品のまとまりの上に置く
+  const box3 = new THREE.Box3();
+  mk.targets.forEach(o => box3.expandByObject(o));
+  if (!box3.isEmpty()) {
+    const c = box3.getCenter(new THREE.Vector3());
+    mk.tag.position.set(c.x, box3.max.y + (view.scene === 'car' ? 0.5 : 0.05), c.z);
+  } else mk.tag.position.set(0, view.scene === 'car' ? 3 : 0.4, 0);
+  setLabel(mk.tag, view.markSpec.text || '');
+  if (mk.gravity) {
+    const { tilt, car } = view.items, theta = tilt.rotation.z, mass = P.mass || CAR.mass;
+    const s = car.scale.x, mg = mass * G;
+    [[mg, new THREE.Vector3(-0.6, 0.62, 1.3).multiplyScalar(s), `重力 m × g ${n0(mg)} N`, new THREE.Vector3(0, -1, 0)],
+     [mg * Math.cos(theta), new THREE.Vector3(0.6, 0.62, 1.3).multiplyScalar(s), `路面を押す m × g × cosθ ${n0(mg * Math.cos(theta))} N`, new THREE.Vector3(Math.sin(theta), -Math.cos(theta), 0)]]
+      .forEach(([force, local, text, dir], j) => {
+        const { a, t } = mk.gravity[j], len = Math.min(2.2, 0.5 * Math.sqrt(force / 100));
+        const at = tilt.localToWorld(local.clone());
+        a.position.copy(at);
+        a.setDirection(dir);
+        a.setLength(len, 0.3, 0.22);
+        t.position.set(at.x + (j ? 1.6 : -1.6), at.y - len - 0.3, at.z);
+        setLabel(t, text);
+      });
+  }
+}
+
 // ---------- 図と3Dの切り替え ----------
 function setView(want) {
   const l = lesson();
@@ -261,5 +342,6 @@ function setView(want) {
 function frame3d(dt) {
   if (view.mode !== '3d') return;
   if (view.scene === 'car') updateCar(dt); else if (view.scene === 'engine') updateEngine(dt); else updateRace();
+  updateMark(dt);
   view.three.renderer.render(view.three.scene, view.three.camera);
 }

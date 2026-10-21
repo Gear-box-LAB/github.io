@@ -98,6 +98,61 @@ function flywheel(group, heavyRim) {
   mark(group, 0.15, 0.04);
 }
 
+// ---------- 数式の考え方（式の行をクリックすると開く） ----------
+// mark は 3D の図に出す印: body 光らせる物の番号（なければ全部）、radius 中心からの線、decor 回らない部分も光らせる、text 札
+const WHY = {
+  J: { text: '回る物の各部分は、中心から遠いほど、1回転で長い道のりを速く動きます。だから、同じ重さでも、中心から遠い所にあるほど回しにくくなります。「重さ」と「中心からの距離」をまとめて1つの数にしたのが、慣性モーメント J です。',
+    mark: { text: '重さ + 中心からの距離 = J' } },
+  compare: { text: '回る物の運動方程式は T = J × α です。同じトルク T なら、角加速度 α（回転の速くなり方）は J に反比例します。J が2倍なら、速くなり方は半分です。',
+    mark: { body: 1, text: 'J が大きいほど速くなりにくい' } },
+  disk: { text: '円板は、中心から外側まで、重さが均等に広がっています。中心に近い部分の重さは J にほとんど効かないので、全部を外周に置いたとき（m × r²）の半分になります。小さな部分ごとの「重さ × 距離²」を全部足す（積分する）と、ちょうど 1/2 × m × r² になります。',
+    mark: { body: 0, radius: 0.07, text: '重さが中心寄り → 1/2 × m × r²' } },
+  ring: { text: '輪は、重さのほとんどが同じ半径 r の所にあります。だから、全部の重さに r² を掛けるだけで J = m × r² です。重さが同じなら、円板の2倍の J になります（同じ半径のとき）。',
+    mark: { body: 1, radius: 0.13, text: '重さがすべて半径 r に → m × r²' } },
+  shapeRatio: { text: '2つは重さも外の大きさも同じです。J の違いは、重さがどこにあるか（中心からの距離）だけで生まれています。',
+    mark: { text: '違いは「重さの位置」だけ' } },
+  point: { text: '中心から r の所にある小さな重さ m は、角速度 ω で回ると、速さ v = r × ω で動きます。その運動エネルギー 1/2 × m × v² = 1/2 × (m × r²) × ω² を、回る物のエネルギーの式 1/2 × J × ω² と比べると、J = m × r² です。r が2乗で効くのは、速さが r に比例し、エネルギーが速さの2乗に比例するからです。',
+    mark: { body: 1, text: '速さ r × ω → エネルギーは r² に比例' } },
+  tire: { text: 'ホイールの J に、ゴムの部分の J を足します。ゴムの重さ 9 kg が、半径の 0.9 倍の所（ゴムの厚みの真ん中）に集まっているとみなし、点の式 m × r² を使います。',
+    mark: { body: 1, text: 'ゴムの真ん中（0.9 × 半径）' } },
+  tireRatio: { text: 'ゴムの部分の J は r² に比例するので、半径の比を2乗した分だけ増えます。ホイールの分は変わらないので、全体では、半径の比の2乗より少し小さくなります。',
+    mark: { text: '半径の比の2乗で増える' } },
+  shapes: { text: 'どの形も、小さな部分の「重さ × 回る中心からの距離²」を全部足したものです。重さの散らばり方で、前に付く数（1/2、1、1/12）だけが変わります。' },
+  crankJ: { text: '実物のクランク軸とフライホイールを合わせた、説明用の値です。空ぶかしでは、エンジンのトルクはこれを回すことだけに使われます。',
+    mark: { body: 0, text: 'クランク + フライホイール' } },
+  alpha: { text: 'まっすぐ動く物の F = m × a を、回る物に置きかえたのが T = J × α です（力 → トルク、質量 → 慣性モーメント、加速度 → 角加速度）。これを α について解きました。1秒に何 rpm 上がるかは、α を 2π ÷ 60 で割って求めます。',
+    mark: { body: 0, text: 'α = トルク ÷ J' } },
+  time: { text: 'α が一定なら、回る速さは時間に比例して増えます（ω = α × t）。目標の ω（6,500 rpm を rad/s に直した値）を α で割ると、かかる時間です。',
+    mark: { body: 0, decor: true, text: 'ω = α × t → t = ω ÷ α' } },
+  energy: { text: '回る物の各部分は、速さ r × ω で動いています。各部分の運動エネルギー 1/2 × m × (r × ω)² を全部足すと、1/2 × (m × r² の合計) × ω² = 1/2 × J × ω² です。ω が2倍ならエネルギーは4倍です。',
+    mark: { body: 0, text: '1/2 × J × ω²' } },
+  roll: { text: 'タイヤが1回転すると、円周 2πr だけ進みます。1秒に回る角度が ω (rad) なら、進む距離は ω × r です。',
+    mark: { body: 0, radius: 0.315, text: 'v = ω × r' } },
+  carEnergy: { text: 'まっすぐ進む物の運動エネルギーです。ブレーキは、タイヤの回転のエネルギーと、これの両方を熱に変えます。車の重さはタイヤよりずっと大きいので、こちらの方がずっと大きくなります。' },
+  wheelJ: { text: 'タイヤとホイールを合わせた、説明用の値です。',
+    mark: { body: 0, text: 'タイヤ + ホイール' } },
+  through: { text: 'タイヤは、入力（小さい歯車）の 1/i の速さで回ります。タイヤの回転のエネルギー 1/2 × J × (ω ÷ i)² を、入力の ω で書き直すと 1/2 × (J ÷ i²) × ω² です。だから入力側から見ると、J が 1/i² に見えます。',
+    mark: { body: 1, decor: true, text: '速さ 1/i → エネルギー 1/i²' } },
+  alphaRatio: { text: 'α = T ÷ J で、J が 1/i² に見えるので、同じトルクなら α は i² 倍になります。',
+    mark: { body: 1, text: 'J が 1/i² → α は i² 倍' } },
+  engineJ: { text: '空ぶかしのとき、エンジンが回すのはこれらの回る部品だけです。同じ速さで回る部品の J は、そのまま足し算できます。',
+    mark: { body: 0, text: '同じ速さで回る部品は足し算' } },
+  vehicleJ: { text: '車の重さ m は回っていませんが、車速 v = エンジンの ω × r ÷ (i × i<sub>f</sub>) の関係でつながっています。車が進むエネルギー 1/2 × m × v² をエンジンの ω で書くと、1/2 × m × r² ÷ (i × i<sub>f</sub>)² × ω² です。これを 1/2 × J × ω² と比べると、エンジンから見た車の J が出ます。',
+    mark: { body: 0, decor: true, text: '車の重さも、エンジンから見ると J' } },
+  allGears: { text: '変速比 i が大きい段（低い段）ほど、(i × i<sub>f</sub>)² で割るので、車の J が小さく見えます。だから低い段ほど、エンジンの回転が速く上がります。' },
+  alphaCar: { text: 'T = J × α を α について解きます。段に入っていれば J はエンジン側 + 車、クラッチを切ればエンジン側だけです。',
+    mark: { body: 0, decor: true, text: 'α = T ÷ (エンジン側 + 車の J)' } },
+  drive: { text: 'ギヤでトルクは i × i<sub>f</sub> 倍になってタイヤに届きます。タイヤは半径 r の所で地面を押すので、力 = タイヤのトルク ÷ r です（ここでは伝達効率は 1 としています）。',
+    mark: { body: 0, decor: true, text: '力 = タイヤのトルク ÷ r' } },
+  road: { text: '転がり抵抗は、タイヤが路面を押す力（重さ m × g）に比例します。空気抵抗は、押しのける空気の量も、その空気に与える速さも車速に比例するので、v² に比例します。' },
+  dOmega: { text: '回転数 n (rpm) は1分間に回る回数です。1回転 = 2π rad、1分 = 60 秒なので、rad/s に直すと 2π × n ÷ 60 です。' },
+  syncTime: { text: 'シンクロの摩擦トルク T<sub>s</sub> が、合わせる側を一定の角加速度 α = T<sub>s</sub> ÷ J で速くします。回転差 Δω を埋めるのにかかる時間は、Δω ÷ α = J × Δω ÷ T<sub>s</sub> です。',
+    mark: { body: 0, text: '摩擦トルクが回転差を埋める' } },
+  syncHeat: { text: '合わせる側の回転を Δω だけ変えるのに使ったエネルギー 1/2 × J × Δω² は、コーンの摩擦で熱になります（相手のアウトプット軸は、車につながっていて速さがほぼ変わらない、とみなしています）。',
+    mark: { body: 0, text: '回転差のエネルギー → 摩擦の熱' } }
+};
+const withRadius = (w, r) => ({ text: w.text, mark: Object.assign({}, w.mark, { radius: r }) });   // 半径がスライダーで変わるときに使う
+
 // ---------- 段階 ----------
 const LESSONS = [
   {
@@ -115,8 +170,8 @@ const LESSONS = [
       'スポーツカーが軽いホイールを使うのは、タイヤを回し始めやすく、止めやすくするためです。加速とブレーキの両方がよくなります。'
     ],
     formula: b => [
-      ['回しにくさ', 'J（慣性モーメント）', b.map(x => `${x.name}: ${n3(x.J)} kg·m²`).join('<br>')],
-      ['比べ方', '同じトルクなら、J が2倍だと速くなる割合は半分', `スチールはアルミの ${n2(b[1].J / b[0].J)} 倍回しにくい`]
+      ['回しにくさ', 'J（慣性モーメント）', b.map(x => `${x.name}: ${n3(x.J)} kg·m²`).join('<br>'), WHY.J],
+      ['比べ方', '同じトルクなら、J が2倍だと速くなる割合は半分', `スチールはアルミの ${n2(b[1].J / b[0].J)} 倍回しにくい`, WHY.compare]
     ]
   },
   {
@@ -133,9 +188,9 @@ const LESSONS = [
       'フィギュアスケートの選手が、腕を縮めると速く回るのと同じ理由です。'
     ],
     formula: b => [
-      ['中心に重さ（半径 0.07 m の円板とみなす）', 'J = 1/2 × m × r²', `1/2 × 8 × 0.07² ≒ ${n3(b[0].J)} kg·m²`],
-      ['外周に重さ（半径 0.13 m の輪とみなす）', 'J = m × r²', `8 × 0.13² = ${n3(b[1].J)} kg·m²`],
-      ['比べると', '外周型 ÷ 中心型', `${n1(b[1].J / b[0].J)} 倍回しにくい`]
+      ['中心に重さ（半径 0.07 m の円板とみなす）', 'J = 1/2 × m × r²', `1/2 × 8 × 0.07² ≒ ${n3(b[0].J)} kg·m²`, WHY.disk],
+      ['外周に重さ（半径 0.13 m の輪とみなす）', 'J = m × r²', `8 × 0.13² = ${n3(b[1].J)} kg·m²`, WHY.ring],
+      ['比べると', '外周型 ÷ 中心型', `${n1(b[1].J / b[0].J)} 倍回しにくい`, WHY.shapeRatio]
     ]
   },
   {
@@ -152,10 +207,10 @@ const LESSONS = [
       '大きいタイヤ（インチアップ）は見た目がよくなりますが、回しにくくなり、加速やブレーキが少し鈍くなります。ここでは、タイヤの重さ 9 kg がゴムの真ん中（半径の 0.9 倍）に集まっていると考えています。'
     ],
     formula: b => [
-      ['点の慣性モーメント', 'J = m × r²', '質量 × 距離の2乗'],
-      ['タイヤとホイール', `J = ${sub('J', 'ホイール')} + 9 × (0.9 r)²`, b.map(x => `${x.name}: ${n3(x.J)} kg·m²`).join('<br>')],
-      ['比べると', `${sub('J', '大')} / ${sub('J', '標準')}`, `${n2(b[1].J / b[0].J)} 倍（半径の比 ${n2(p.tire / 0.30)}、その2乗 ${n2((p.tire / 0.30) ** 2)}）`],
-      ['形ごとの J', '円板 1/2 m r²、輪 m r²、細い棒（中心で回す） 1/12 m L²', 'どれも、質量 × 長さの2乗の形']
+      ['点の慣性モーメント', 'J = m × r²', '質量 × 距離の2乗', withRadius(WHY.point, p.tire)],
+      ['タイヤとホイール', `J = ${sub('J', 'ホイール')} + 9 × (0.9 r)²`, b.map(x => `${x.name}: ${n3(x.J)} kg·m²`).join('<br>'), withRadius(WHY.tire, 0.9 * p.tire)],
+      ['比べると', `${sub('J', '大')} / ${sub('J', '標準')}`, `${n2(b[1].J / b[0].J)} 倍（半径の比 ${n2(p.tire / 0.30)}、その2乗 ${n2((p.tire / 0.30) ** 2)}）`, WHY.tireRatio],
+      ['形ごとの J', '円板 1/2 m r²、輪 m r²、細い棒（中心で回す） 1/12 m L²', 'どれも、質量 × 長さの2乗の形', WHY.shapes]
     ]
   },
   {
@@ -179,9 +234,9 @@ const LESSONS = [
     formula: b => {
       const alpha = p.throttle / b[0].J;
       return [
-        ['クランク + フライホイールの J', 'J（説明用の仮の値）', `${b[0].J} kg·m²`],
-        ['角加速度', 'α = T / J', `${p.throttle} ÷ ${b[0].J} = ${n0(alpha)} rad/s²（1秒に ${n0(alpha / RPM)} rpm 上がる）`],
-        ['レッドゾーンまでの時間', 't = ω / α = (6500 × 2π / 60) / α', `${n2(REDLINE * RPM / alpha)} 秒`]
+        ['クランク + フライホイールの J', 'J（説明用の仮の値）', `${b[0].J} kg·m²`, WHY.crankJ],
+        ['角加速度', 'α = T / J', `${p.throttle} ÷ ${b[0].J} = ${n0(alpha)} rad/s²（1秒に ${n0(alpha / RPM)} rpm 上がる）`, WHY.alpha],
+        ['レッドゾーンまでの時間', 't = ω / α = (6500 × 2π / 60) / α', `${n2(REDLINE * RPM / alpha)} 秒`, WHY.time]
       ];
     }
   },
@@ -218,9 +273,9 @@ const LESSONS = [
     formula: b => {
       const w = b[0].omega || 0, v = w * CAR.tire;
       return [
-        ['回転のエネルギー', 'E = 1/2 × J × ω²', `1/2 × ${b[0].J} × ${n1(w)}² = ${n0(0.5 * b[0].J * w * w)} J`],
-        ['今の回転数と車速', 'v = ω × r', `${n0(w / RPM)} rpm → 時速 ${n0(v * 3.6)} km`],
-        ['車が進むエネルギー（車 1,000 kg）', 'E = 1/2 × m × v²', `${n0(0.5 * CAR.mass * v * v)} J（タイヤ4本の回転の分は ${n0(4 * 0.5 * b[0].J * w * w)} J）`]
+        ['回転のエネルギー', 'E = 1/2 × J × ω²', `1/2 × ${b[0].J} × ${n1(w)}² = ${n0(0.5 * b[0].J * w * w)} J`, WHY.energy],
+        ['今の回転数と車速', 'v = ω × r', `${n0(w / RPM)} rpm → 時速 ${n0(v * 3.6)} km`, WHY.roll],
+        ['車が進むエネルギー（車 1,000 kg）', 'E = 1/2 × m × v²', `${n0(0.5 * CAR.mass * v * v)} J（タイヤ4本の回転の分は ${n0(4 * 0.5 * b[0].J * w * w)} J）`, WHY.carEnergy]
       ];
     }
   },
@@ -247,9 +302,9 @@ const LESSONS = [
       '車では、低い段ほどギヤ比が大きいので、エンジンから見た車の重さが軽くなり、エンジンの回転が速く上がります。'
     ],
     formula: b => [
-      ['タイヤ + ホイールの J', 'J（説明用の仮の値）', `${b[0].J} kg·m²`],
-      ['小さい歯車から見た J', `${sub('J', 'in')} = J / i²`, `${b[0].J} ÷ ${p.ratio}² = ${n3(b[1].J)} kg·m²`],
-      ['同じトルクでの、回る側の速くなり方の比', `${sub('α', 'ギヤ')} / ${sub('α', '直接')} = i²`, `${n2(p.ratio ** 2)} 倍`]
+      ['タイヤ + ホイールの J', 'J（説明用の仮の値）', `${b[0].J} kg·m²`, WHY.wheelJ],
+      ['小さい歯車から見た J', `${sub('J', 'in')} = J / i²`, `${b[0].J} ÷ ${p.ratio}² = ${n3(b[1].J)} kg·m²`, WHY.through],
+      ['同じトルクでの、回る側の速くなり方の比', `${sub('α', 'ギヤ')} / ${sub('α', '直接')} = i²`, `${n2(p.ratio ** 2)} 倍`, WHY.alphaRatio]
     ]
   },
   {
@@ -267,12 +322,12 @@ const LESSONS = [
     formula: b => {
       const i = RATIOS[p.gear][1];
       return [
-        ['エンジン側の J', 'エンジン + フライホイール + クラッチ', PARTS.map(x => `${x[0]} ${x[1]}`).join('、') + ` → 合計 ${n3(ENGINE_J)} kg·m²`],
-        ['車をエンジンから見た J', `${sub('J', 'v')} = m × r² / (i × ${sub('i', 'f')})²`, `${CAR.mass} × ${CAR.tire}² ÷ (${i} × ${CAR.final})² = ${n3(vehicleJ(i))} kg·m²`],
-        ['全段の比較', '段: 車の J（エンジンから見た値）', RATIOS.map(r => `${r[0]} ${n3(vehicleJ(r[1]))}`).join('、')],
-        ['トルク 150 N·m での回転の上がり方（止まっているとき）', 'α = T / (J + Jv)', `${RATIOS[p.gear][0]}: 1秒に ${n0(150 / b[0].J / RPM)} rpm、クラッチを切ると 1秒に ${n0(150 / ENGINE_J / RPM)} rpm`],
-        ['タイヤが地面を押す力（駆動力）', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} / r`, RATIOS.map(r => `${r[0]} ${n0(150 * r[1] * CAR.final / CAR.tire)} N`).join('、')],
-        ['走行抵抗', 'F = μ × m × g + 1/2 × ρ × Cd·A × v²', `時速 100 km で ${n0(roadForce(100 / 3.6))} N、時速 150 km で ${n0(roadForce(150 / 3.6))} N（駆動力から引いた残りが、加速に使われる）`]
+        ['エンジン側の J', 'エンジン + フライホイール + クラッチ', PARTS.map(x => `${x[0]} ${x[1]}`).join('、') + ` → 合計 ${n3(ENGINE_J)} kg·m²`, WHY.engineJ],
+        ['車をエンジンから見た J', `${sub('J', 'v')} = m × r² / (i × ${sub('i', 'f')})²`, `${CAR.mass} × ${CAR.tire}² ÷ (${i} × ${CAR.final})² = ${n3(vehicleJ(i))} kg·m²`, WHY.vehicleJ],
+        ['全段の比較', '段: 車の J（エンジンから見た値）', RATIOS.map(r => `${r[0]} ${n3(vehicleJ(r[1]))}`).join('、'), WHY.allGears],
+        ['トルク 150 N·m での回転の上がり方（止まっているとき）', 'α = T / (J + Jv)', `${RATIOS[p.gear][0]}: 1秒に ${n0(150 / b[0].J / RPM)} rpm、クラッチを切ると 1秒に ${n0(150 / ENGINE_J / RPM)} rpm`, WHY.alphaCar],
+        ['タイヤが地面を押す力（駆動力）', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} / r`, RATIOS.map(r => `${r[0]} ${n0(150 * r[1] * CAR.final / CAR.tire)} N`).join('、'), WHY.drive],
+        ['走行抵抗', 'F = μ × m × g + 1/2 × ρ × Cd·A × v²', `時速 100 km で ${n0(roadForce(100 / 3.6))} N、時速 150 km で ${n0(roadForce(150 / 3.6))} N（駆動力から引いた残りが、加速に使われる）`, WHY.road]
       ];
     }
   },
@@ -289,9 +344,9 @@ const LESSONS = [
       'クラッチディスクを軽くしたり、シンクロのコーンを2重、3重にして摩擦トルクを増やしたりするのは、この時間を短くして、変速を軽く速くするためです。'
     ],
     formula: () => [
-      ['角速度の差', 'Δω = 2π × Δn / 60', `${n2(p.syncDiff * RPM)} rad/s`],
-      ['合わせる時間', `t = J × Δω / ${sub('T', 's')}`, `${p.syncJ} × ${n2(p.syncDiff * RPM)} ÷ ${p.syncT} = ${n3(p.syncJ * p.syncDiff * RPM / p.syncT)} 秒`],
-      ['コーンで出る熱', `E = 1/2 × J × Δω²`, `${n0(0.5 * p.syncJ * (p.syncDiff * RPM) ** 2)} J`]
+      ['角速度の差', 'Δω = 2π × Δn / 60', `${n2(p.syncDiff * RPM)} rad/s`, WHY.dOmega],
+      ['合わせる時間', `t = J × Δω / ${sub('T', 's')}`, `${p.syncJ} × ${n2(p.syncDiff * RPM)} ÷ ${p.syncT} = ${n3(p.syncJ * p.syncDiff * RPM / p.syncT)} 秒`, WHY.syncTime],
+      ['コーンで出る熱', `E = 1/2 × J × Δω²`, `${n0(0.5 * p.syncJ * (p.syncDiff * RPM) ** 2)} J`, WHY.syncHeat]
     ]
   }
 ];
@@ -481,6 +536,8 @@ function build() {
     (b.tags || []).forEach(t => tags.push({ text: t[0], x: x + t[1], y: t[2] }));
   });
   el('tags').innerHTML = tags.map(t => `<span class="tag ${t.main ? 'main' : ''}">${t.text}</span>`).join('');
+  // 考え方を開いたまま作り直したとき（スライダーを動かしたとき）は、新しい値で印を出し直す
+  if (why.open >= 0) { const row = LESSONS[state.step - 1].formula(bodies)[why.open]; setMark(row && row[3] ? row[3].mark || null : null); }
   frameCamera();
   el('banner').hidden = true;
 }
@@ -531,6 +588,7 @@ function frame(now) {
     (b.parts || []).forEach(part => { part.group.rotation.z = -b.angle * part.ratio; });
   });
   if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) el('banner').hidden = true;
+  pulseMark(dt);
   placeTags();
   if (lesson.strip) drawStrip();
   shownAt += dt;
@@ -584,6 +642,38 @@ function finish(b) {
   if (LESSONS[state.step - 1].race) banner(`${b.place}着: ${b.name}（${n2(b.time)} 秒）`);
 }
 
+// ---------- 数式の考え方の印（explain.js の mark） ----------
+// mark = { body: 光らせる物の番号（なければ全部）, radius: 中心から引く線の長さ (m), decor: true なら回らない部分も光らせる, text: 札 }
+let markNow = null;   // 今の印: { mats: 光らせる材質, line: 半径の線, x, y: 札の位置, time }
+function setMark(spec) {
+  if (markNow) {
+    markNow.mats.forEach(m => m.emissive.setRGB(0, 0, 0));
+    if (markNow.line && markNow.line.parent) markNow.line.parent.remove(markNow.line);
+  }
+  markNow = null;
+  el('whyTag').hidden = !spec;
+  if (!spec) return;
+  const list = spec.body === undefined ? bodies : [bodies[spec.body]];
+  const mats = [];
+  list.forEach(b => [b.group, ...(b.parts || []).map(x => x.group), ...(spec.decor ? [b.decor] : [])]
+    .forEach(g => g.traverse(x => { if (x.material && x.material.emissive) mats.push(x.material); })));
+  let line = null;
+  if (spec.radius) {   // 回る中心から、半径 r の所までの白い線（物と一緒に回る）
+    line = new THREE.Mesh(new THREE.BoxGeometry(0.008, spec.radius, 0.008), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    line.position.set(0, spec.radius / 2, 0.14);
+    list[0].group.add(line);
+  }
+  const x = list.reduce((s, b) => s + b.group.position.x, 0) / list.length;
+  markNow = { mats, line, x, y: (spec.radius || 0.25) + 0.15, time: 0 };
+  el('whyTag').textContent = spec.text || '';
+}
+function pulseMark(dt) {
+  if (!markNow) return;
+  markNow.time += dt;
+  const k = 0.5 + 0.5 * Math.sin(markNow.time * 6);
+  markNow.mats.forEach(m => m.emissive.setRGB(0.8 * k, 0.45 * k, 0));
+}
+
 // 部品の名前の札: 3Dの位置を、画面の位置に直して置く
 function placeTags() {
   const rect = canvas.getBoundingClientRect();
@@ -594,12 +684,17 @@ function placeTags() {
     tag.style.left = `${(v.x + 1) / 2 * rect.width}px`;
     tag.style.top = `${(1 - v.y) / 2 * rect.height}px`;
   });
+  if (markNow) {   // 考え方の札
+    const v = new THREE.Vector3(markNow.x, markNow.y, 0.1).project(camera);
+    el('whyTag').style.left = `${(v.x + 1) / 2 * rect.width}px`;
+    el('whyTag').style.top = `${(1 - v.y) / 2 * rect.height}px`;
+  }
 }
 
 function showReadout() {
   el('readout').innerHTML = bodies.map(b => `${b.name}: ${n0(b.omega / RPM)} rpm（J = ${n3(b.J)} kg·m²、回転のエネルギー ${n0(0.5 * b.J * b.omega ** 2)} J${b.speed !== undefined ? `、車速 ${n0(b.speed)} km/h` : ''}）`).join('<br>')
     + `<br>回転は、目で追えるように 1/20 の速さで見せています。${LESSONS[state.step - 1].slowmo ? `時間も ${LESSONS[state.step - 1].slowmo} 倍ゆっくり進めています（表示の秒数は実際の時間）。` : ''}`;
-  if (state.tab === 'formula' && state.step === 5) renderLesson();
+  if (state.tab === 'formula' && state.step === 5) refreshNums(el('lessonOutput'), LESSONS[4].formula(bodies));
 }
 
 new ResizeObserver(() => {
@@ -631,13 +726,14 @@ function renderLesson() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')
-    : l.formula(bodies).map(r => `<div class="formula"><b>${r[0]}</b><span class="math">${r[1]}</span><span class="num">${r[2]}</span></div>`).join('')
+    : formulaHTML(l.formula(bodies), false)
       + '<p class="note">J: 慣性モーメント (kg·m²)、m: 質量 (kg)、r: 半径 (m)、T: トルク (N·m)、ω: 角速度 (rad/s)、α: 角加速度 (rad/s²)、n: 回転数 (rpm)。部品の重さや J は、説明用の仮の値です。</p>';
   el('prev').disabled = state.step === 1;
   el('next').disabled = state.step === LESSONS.length;
 }
 
 function showStep(step) {
+  closeWhy();   // Step を変えたら、考え方と印を閉じる
   state.step = Math.min(LESSONS.length, Math.max(1, step));
   state.pushing = false;
   build();
@@ -649,7 +745,10 @@ function showStep(step) {
 el('steps').addEventListener('click', e => { if (e.target.dataset.step) showStep(Number(e.target.dataset.step)); });
 el('prev').addEventListener('click', () => showStep(state.step - 1));
 el('next').addEventListener('click', () => showStep(state.step + 1));
-el('tabs').addEventListener('click', e => { if (e.target.dataset.tab) { state.tab = e.target.dataset.tab; renderLesson(); } });
+el('tabs').addEventListener('click', e => { if (e.target.dataset.tab) { state.tab = e.target.dataset.tab; closeWhy(); renderLesson(); } });
+// 数式の行をクリックすると考え方を開き、3D の図に印を出す（explain.js）
+why.onMark = setMark;
+bindWhy(el('lessonOutput'), () => LESSONS[state.step - 1].formula(bodies), renderLesson);
 el('push').addEventListener('click', () => {
   bodies.forEach(b => Object.assign(b, { omega: 0, time: 0, distance: 0, finished: false, joined: false, braking: false }));
   el('banner').hidden = true;

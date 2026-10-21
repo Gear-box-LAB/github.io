@@ -24,6 +24,7 @@
     <canvas id="stage" aria-label="回る物の3Dの図"></canvas>
     <p class="hint">車の部品にトルクをかけて、回り方を比べます。赤い印で回り方が見えます。ドラッグで向きを変えられます。</p>
     <div class="tags" id="tags" aria-hidden="true"></div>
+    <span class="tag whyMark" id="whyTag" hidden></span>
     <p class="banner" id="banner" hidden></p>
     <canvas class="strip" id="strip" hidden aria-label="それぞれのホイールで走った車の進み方"></canvas>
     </div>
@@ -54,6 +55,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="explain.js"></script>
 <script src="inertia.js"></script>
 </body>
 </html>

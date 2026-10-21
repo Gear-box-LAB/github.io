@@ -129,7 +129,11 @@ function startCourse(lessons) {
   el('steps').addEventListener('click', e => { if (e.target.dataset.step) showStep(Number(e.target.dataset.step)); });
   el('prev').addEventListener('click', () => showStep(state.step - 1));
   el('next').addEventListener('click', () => showStep(state.step + 1));
-  el('tabs').addEventListener('click', e => { if (e.target.dataset.tab) { state.tab = e.target.dataset.tab; renderLesson(); } });
+  el('tabs').addEventListener('click', e => { if (e.target.dataset.tab) { state.tab = e.target.dataset.tab; closeWhy(); renderLesson(); } });
+  // 数式の行をクリックすると考え方を開き、3D の図に印を出す（explain.js）
+  why.onMark = setMark;
+  why.on3d = () => { setView('3d'); renderLesson(); };
+  bindWhy(el('lessonOutput'), () => lesson().formula(), renderLesson);
   el('controls').addEventListener('input', e => {
     const key = e.target.dataset.key;
     P[key] = Number(e.target.value);
@@ -137,7 +141,7 @@ function startCourse(lessons) {
     renderLesson();
   });
   el('run').addEventListener('click', () => { const l = lesson(); if (l.start) { l.start(); state.running = true; } });
-  el('showChart').addEventListener('click', () => { setView('chart'); draw(); });
+  el('showChart').addEventListener('click', () => { setView('chart'); renderLesson(); });
   el('show3d').addEventListener('click', () => setView('3d'));
   new ResizeObserver(draw).observe(el('chart'));
   showStep(1);
@@ -165,6 +169,8 @@ function showStep(step) {
   if (LESSONS.length && lesson().leave) lesson().leave();   // 前の項目の後片付け（加速くらべの表など）
   state.step = Math.min(LESSONS.length, Math.max(1, step));
   state.running = false;
+  why.open = -1;
+  view.markSpec = null;   // Step を変えたら、考え方と印を閉じる
   const l = lesson();
   el('steps').innerHTML = LESSONS.map((x, i) =>
     `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1}. ${x.name}</button>`).join('');
@@ -183,7 +189,7 @@ function renderLesson() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('current', b.dataset.tab === state.tab));
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')
-    : l.formula().map(r => `<div class="formula"><b>${r[0]}</b><span class="math">${r[1]}</span><span class="num">${r[2]}</span></div>`).join('')
+    : formulaHTML(l.formula(), !!l.scene && view.mode === 'chart')
       + `<p class="note">${l.symbols || ''} 車は 1,000 kg、タイヤの半径 0.315 m、最終減速比 4.1、伝達効率 0.92 です。変速比はギヤボックスLABの初期値、エンジンは 2.0 L の自然吸気を想定した説明用の仮の値です。</p>`;
   el('prev').disabled = state.step === 1;
   el('next').disabled = state.step === LESSONS.length;

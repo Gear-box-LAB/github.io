@@ -78,6 +78,26 @@ function stepRacer(r, dt) {
   if (r.points.length && Math.round(r.t * 20) !== Math.round((r.t - dt) * 20)) r.points.push([r.t, r.v]);
 }
 
+// 数式の考え方（式の行をクリックすると開く）。mark は 3D の図に出す印（study3d.js の setMark）
+const WHY = {
+  torque: { text: 'エンジンのトルクは、燃焼のガスがピストンを押し下げる力で決まり、コンロッドを通してクランク軸を回します。燃やせる燃料の量は、1回に吸い込める空気の量で決まるので、トルクカーブは「1回転あたりにどれだけ空気を吸えるか」の形になります。低い回転では吸気の勢いが弱く、高い回転では吸う時間が足りなくなって、どちらもトルクが下がります。',
+    mark: { glow: ['pistons', 'crank'], text: '燃焼がピストンを押す → クランクが回る' } },
+  torqueMax: { text: 'トルクカーブの一番高い所です。吸気管の長さやバルブを開ける時期は、この回転数あたりで空気が一番よく入るように作られています。',
+    mark: { glow: ['pistons'], text: '空気が一番よく入る回転数' } },
+  torqueRatio: { text: '今の回転数のトルクが、最大トルクの何割かです。カーブが平らなエンジンほど、広い回転数で 9 割以上のトルクが出て、運転しやすくなります。' },
+  power: { text: '出力（仕事率）は「1秒あたりにする仕事」です。まっすぐ動く物では「力 × 速さ」でした。回る物では、力の代わりにトルク T、速さの代わりに角速度 ω を使って T × ω です。ω は rpm を rad/s に直した 2π × n ÷ 60（1回転 = 2π rad、1分 = 60秒）で、最後に 1000 で割って kW にします。',
+    mark: { glow: ['flywheel', 'torque'], text: 'トルク × 回る速さ = 出力' } },
+  powerMax: { text: 'トルクが下がり始めても、回転数の増え方の方が大きければ、掛け算の T × ω は増え続けます。トルクの下がり方が回転数の増え方に追いついた所が、出力の山です。',
+    mark: { glow: ['flywheel'], text: 'T が下がっても ω が増えれば出力は増える' } },
+  torquePeak: { text: '出力の山は、トルクの山より高い回転数にあります。トルクの山を過ぎても、しばらくは回転数の増え方の方が勝つからです。' },
+  after: { text: '変速する一瞬、車速はほとんど変わりません。車速が同じなら、エンジンの回転数は変速比に比例します（回転数 = 車速 ÷ r × i × i<sub>f</sub>）。だから変速の後の回転数は、「次の段の変速比 ÷ 今の段の変速比」の割合に下がります。' },
+  step: { text: 'となりの段の変速比の比です。この比が大きいほど、変速で回転数が大きく下がります。ふつうは上の段ほど小さく（1.7 → 1.2 くらい）して、速く走っているときに回転数が落ちすぎないようにします。' },
+  shiftSpeed: { text: '回転数の式（回転数 = 車速 ÷ r × i × i<sub>f</sub>）を車速について解き、変速する回転数を入れます。' },
+  cross: { text: '同じ車速なら、駆動力が大きい段の方が速く加速します。今の段の駆動力の線が、次の段の線を下回った瞬間から、次の段の方が得になります。だから、2本の線が交わる所で変速するのが一番速い、という考え方です。変速が一瞬で終わる、という前提です。' },
+  race: { text: 'どの車も、0.002 秒ごとに「加速度 = (駆動力 − 走行抵抗) ÷ (m × (1 + δ))」で速さを少し増やし、「速さ × 時間」で進んだ距離を足していきます。変速の間の 0.3 秒は、駆動力を 0 にします。その地点を通り過ぎた時刻が、タイムです。' },
+  fuel: { text: '一定の速さで走っているときは加速しないので、駆動力 = 走行抵抗 R です。タイヤで R を出すのに要るエンジンのトルクは、駆動力の式 F = T × i × i<sub>f</sub> × η ÷ r を、T について解いた形になります。高い段ほど i が小さいので、要るトルクは大きく、回転数は低くなります。' }
+};
+
 const LESSONS_ENGINE = [
   {
     name: 'トルクカーブ', title: 'エンジンのトルクは、回転数で変わる',
@@ -92,9 +112,9 @@ const LESSONS_ENGINE = [
     formula: () => {
       const [r, t] = peak(torqueAt);
       return [
-        ['今の回転数のトルク', 'T（トルクカーブから読む）', `${P.rpm} rpm → ${n0(torqueAt(P.rpm))} N·m`],
-        ['最大トルク', '山のてっぺん', `${n0(t)} N·m / ${r} rpm`],
-        ['最大トルクとの比', `T / ${sub('T', 'max')}`, `${n0(torqueAt(P.rpm) / t * 100)}%`]
+        ['今の回転数のトルク', 'T（トルクカーブから読む）', `${P.rpm} rpm → ${n0(torqueAt(P.rpm))} N·m`, WHY.torque],
+        ['最大トルク', '山のてっぺん', `${n0(t)} N·m / ${r} rpm`, WHY.torqueMax],
+        ['最大トルクとの比', `T / ${sub('T', 'max')}`, `${n0(torqueAt(P.rpm) / t * 100)}%`, WHY.torqueRatio]
       ];
     },
     chart: () => ({
@@ -120,9 +140,9 @@ const LESSONS_ENGINE = [
     formula: () => {
       const [pr, pp] = peak(powerAt), [tr] = peak(torqueAt);
       return [
-        ['出力', 'P = T × ω = T × 2π × n / 60 / 1000', `${n0(torqueAt(P.rpm))} × 2π × ${P.rpm} / 60 / 1000 = ${n1(powerAt(P.rpm))} kW（${n0(powerAt(P.rpm) / 0.735)} PS）`],
-        ['最大出力', '出力の山', `${n1(pp)} kW（${n0(pp / 0.735)} PS）/ ${pr} rpm`],
-        ['最大トルクの回転数', 'トルクの山', `${tr} rpm（最大出力の回転数より低い）`]
+        ['出力', 'P = T × ω = T × 2π × n / 60 / 1000', `${n0(torqueAt(P.rpm))} × 2π × ${P.rpm} / 60 / 1000 = ${n1(powerAt(P.rpm))} kW（${n0(powerAt(P.rpm) / 0.735)} PS）`, WHY.power],
+        ['最大出力', '出力の山', `${n1(pp)} kW（${n0(pp / 0.735)} PS）/ ${pr} rpm`, WHY.powerMax],
+        ['最大トルクの回転数', 'トルクの山', `${tr} rpm（最大出力の回転数より低い）`, WHY.torquePeak]
       ];
     },
     chart: () => {
@@ -149,9 +169,9 @@ const LESSONS_ENGINE = [
     ],
     symbols: 'n: エンジン回転数、i<sub>n</sub>: n 段の変速比。',
     formula: () => [
-      ['変速直後の回転数', `${sub('n', '後')} = ${sub('n', '変速')} × ${sub('i', 'n+1')} / ${sub('i', 'n')}`, GEARS.slice(0, -1).map((x, g) => `${x[0]}→${GEARS[g + 1][0]} ${n0(P.shift * GEARS[g + 1][1] / x[1])} rpm`).join('、')],
-      ['ステップ比', `${sub('i', 'n')} / ${sub('i', 'n+1')}`, GEARS.slice(0, -1).map((x, g) => n2(x[1] / GEARS[g + 1][1])).join('、')],
-      ['変速する車速', `v（${P.shift} rpm になる車速）`, GEARS.slice(0, -1).map((x, g) => `${x[0]} ${n0(speedAt(g, P.shift))} km/h`).join('、')]
+      ['変速直後の回転数', `${sub('n', '後')} = ${sub('n', '変速')} × ${sub('i', 'n+1')} / ${sub('i', 'n')}`, GEARS.slice(0, -1).map((x, g) => `${x[0]}→${GEARS[g + 1][0]} ${n0(P.shift * GEARS[g + 1][1] / x[1])} rpm`).join('、'), WHY.after],
+      ['ステップ比', `${sub('i', 'n')} / ${sub('i', 'n+1')}`, GEARS.slice(0, -1).map((x, g) => n2(x[1] / GEARS[g + 1][1])).join('、'), WHY.step],
+      ['変速する車速', `v（${P.shift} rpm になる車速）`, GEARS.slice(0, -1).map((x, g) => `${x[0]} ${n0(speedAt(g, P.shift))} km/h`).join('、'), WHY.shiftSpeed]
     ],
     chart: () => {
       // のこぎり: 1速で 0 から変速の回転数まで → 次の段へ落ちる → … 6速はレッドゾーンまで
@@ -182,7 +202,7 @@ const LESSONS_ENGINE = [
     symbols: 'F<sub>n</sub>(v): n 段で車速 v のときの駆動力。',
     formula: () => GEARS.slice(0, -1).map((x, g) => {
       const s = bestShift(g);
-      return [`${x[0]} → ${GEARS[g + 1][0]}`, `${sub('F', 'n')}(v) = ${sub('F', 'n+1')}(v) の車速`, s.cross ? `時速 ${n0(s.v)} km、${n0(s.rpm)} rpm で変速` : `交わらない → レッドゾーン ${REDLINE} rpm（時速 ${n0(s.v)} km）まで引っぱる`];
+      return [`${x[0]} → ${GEARS[g + 1][0]}`, `${sub('F', 'n')}(v) = ${sub('F', 'n+1')}(v) の車速`, s.cross ? `時速 ${n0(s.v)} km、${n0(s.rpm)} rpm で変速` : `交わらない → レッドゾーン ${REDLINE} rpm（時速 ${n0(s.v)} km）まで引っぱる`, WHY.cross];
     }),
     chart: () => ({
       xLabel: '車速 (km/h)', yLabel: '駆動力 (N)', xMax: 240, xStep: 40, yMax: 10000, yStep: 2000,
@@ -214,8 +234,8 @@ const LESSONS_ENGINE = [
       '変速には 0.3 秒かかり、その間は加速しない、発進は半クラッチでエンジンを 3,000 rpm に保つ、としています。どちらも説明用の値です。'
     ],
     symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図の 4. と同じ式）。',
-    formula: () => racers.map(r => [r.name, '500 m、1000 m、1500 m、2000 m のタイム', SPLITS.map(d => r.split[d] !== undefined ? `${n3(r.split[d])} 秒` : '−').join('、')])
-      .concat([['最適な点の変速点', `${sub('F', 'n')}(v) = ${sub('F', 'n+1')}(v)`, [0, 1, 2, 3, 4].map(g => `${GEARS[g][0]}→${GEARS[g + 1][0]} ${n0(crossAt(g))} rpm`).join('、')]]),
+    formula: () => racers.map(r => [r.name, '500 m、1000 m、1500 m、2000 m のタイム', SPLITS.map(d => r.split[d] !== undefined ? `${n3(r.split[d])} 秒` : '−').join('、'), WHY.race])
+      .concat([['最適な点の変速点', `${sub('F', 'n')}(v) = ${sub('F', 'n+1')}(v)`, [0, 1, 2, 3, 4].map(g => `${GEARS[g][0]}→${GEARS[g + 1][0]} ${n0(crossAt(g))} rpm`).join('、'), WHY.cross]]),
     chart: () => ({
       xLabel: '時間 (秒)', yLabel: '車速 (km/h)', xMax: 50, xStep: 10, yMax: 240, yStep: 40,
       series: racers.map(r => ({ name: r.short, color: r.color, points: r.points.concat([[r.t, r.v]]) }))
@@ -237,7 +257,7 @@ const LESSONS_ENGINE = [
     formula: () => GEARS.map((x, g) => {
       const n = rpmAt(g, P.speed), need = resistTotal(P.speed) * CAR.tire / (total(g) * CAR.eff);
       const ok = n >= IDLE && n <= REDLINE;
-      return [x[0], `${sub('T', '必要')} = R × r / (i × ${sub('i', 'f')} × η)`, ok ? `${n0(n)} rpm で ${n1(need)} N·m 必要（余裕 ${n0(torqueAt(n) - need)} N·m）` : 'この車速では回せない回転数'];
+      return [x[0], `${sub('T', '必要')} = R × r / (i × ${sub('i', 'f')} × η)`, ok ? `${n0(n)} rpm で ${n1(need)} N·m 必要（余裕 ${n0(torqueAt(n) - need)} N·m）` : 'この車速では回せない回転数', WHY.fuel];
     }),
     chart: () => ({
       xLabel: 'エンジン回転数 (rpm)', yLabel: 'トルク (N·m)', xMax: 7000, xStep: 1000, yMax: 250, yStep: 50,
