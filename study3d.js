@@ -21,6 +21,7 @@ function init3d() {
   scene.add(sun);
   view.three = { renderer, scene, camera, controls };
   enablePartInfo(canvas, () => camera, () => view.world);   // 部品をタッチすると名前と説明（partinfo.js）
+  canvas.addEventListener('pointerdown', () => { el('hint3d').hidden = true; });   // 図をさわったら、左上の説明を消す
   new ResizeObserver(() => {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     camera.aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
@@ -122,23 +123,27 @@ function build3d() {
   view.scene = l.scene;
   view.items = [];
   scene.add(view.world);
-  const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: l.circuit ? [[0.45, 0.55, 1.55], [0.03, 0.02, 0.12]] : [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
+  const cam = l.scene === 'custom' ? l.cam : { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: l.circuit ? [[0.45, 0.55, 1.55], [0.03, 0.02, 0.12]] : [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
   // 縦長の画面（スマホ）では、札が左右で見切れないように、カメラを少し引く
   const aspect = el('scene3d').clientWidth / Math.max(1, el('scene3d').clientHeight);
-  const pull = aspect < 1.2 ? Math.min(1.9, 1.2 / aspect) : 1;
+  const pull = aspect < 1.5 ? Math.min(2.4, 1.5 / aspect) : 1;
   camera.position.sub(controls.target).multiplyScalar(pull).add(controls.target);
   view.labelScale = Math.sqrt(pull);
-  ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
+  if (l.scene === 'custom') view.items = l.build3d(view.world);   // 項目が自分で組み立てる（trans.js など）
+  else ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
   controls.update();
   el('hint3d').textContent = {
     car: `部品をタッチすると、名前と説明が出ます。車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
     engine: `部品をタッチすると、名前と説明が出ます。ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。ピストンの上が橙色に光るのが、燃焼（点火順序 1-3-4-2）です。`,
     carEngine: `部品をタッチすると、名前と説明が出ます。車体を透かして、エンジンを3倍の大きさで見せています。エンジンの回転は 1/50、タイヤと道路は 1/${SLOW} の速さです。ドラッグで向きを変えられます。`,
-    race: '部品をタッチすると、名前と説明が出ます。札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
+    race: '部品をタッチすると、名前と説明が出ます。札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。',
+    custom: `部品をタッチすると、名前と説明が出ます。ドラッグで向きを変えられます。${l.hint3d || ''}`
   }[l.scene];
   showPart(null);   // 前の部品の説明を閉じる
+  clearTimeout(view.hintTimer);
+  view.hintTimer = setTimeout(() => { el('hint3d').hidden = true; }, 6000);   // 説明は 6 秒で消す（図に重ならないように）
   buildMark();
 }
 
@@ -423,6 +428,7 @@ function updateRace() {
 //   エンジン: 'pistons' ピストン、'crank' クランク軸、'flywheel' フライホイール、'torque' トルクの矢印
 function partsOf(name) {
   const it = view.items;
+  if (view.scene === 'custom') return (it.parts && it.parts[name]) || [];   // 項目が決めた部品の名前
   if (view.scene === 'car') {
     if (name === 'wheels') return it.car.userData.wheels;
     if (name === 'body') return [it.car.userData.body];
@@ -516,7 +522,8 @@ function setView(want) {
 // 毎フレーム（study.js のループから呼ぶ）
 function frame3d(dt) {
   if (view.mode !== '3d') return;
-  ({ car: updateCar, engine: updateEngine, race: updateRace, carEngine: updateCarEngine })[view.scene](dt);
+  if (view.scene === 'custom') lesson().update3d(view.items, dt);
+  else ({ car: updateCar, engine: updateEngine, race: updateRace, carEngine: updateCarEngine })[view.scene](dt);
   updateMark(dt);
   view.three.renderer.render(view.three.scene, view.three.camera);
 }
