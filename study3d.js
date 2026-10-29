@@ -123,7 +123,7 @@ function build3d() {
   view.scene = l.scene;
   view.items = [];
   scene.add(view.world);
-  const cam = l.scene === 'custom' ? l.cam : { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: l.circuit ? [[0.45, 0.55, 1.55], [0.03, 0.02, 0.12]] : [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
+  const cam = l.scene === 'custom' ? (typeof l.cam === 'function' ? l.cam() : l.cam) : { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: l.circuit ? [[0.45, 0.55, 1.55], [0.03, 0.02, 0.12]] : [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
   // 縦長の画面（スマホ）では、札が左右で見切れないように、カメラを少し引く

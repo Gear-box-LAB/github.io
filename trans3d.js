@@ -63,9 +63,9 @@ function nameTag(parent, text, x, y, z, color, h) {
   parent.add(t);
   return t;
 }
-// 力が通っている部品を光らせる（color: 光の色、0 で消す）
-function glow(list, color) {
-  list.forEach(o => o.traverse(x => { if (x.material && x.material.emissive) x.material.emissive.setHex(color || 0).multiplyScalar(color ? 0.5 : 1); }));
+// 力が通っている部品を光らせる（color: 光の色、0 で消す、k: 光の強さ）
+function glow(list, color, k) {
+  list.forEach(o => o.traverse(x => { if (x.material && x.material.emissive) x.material.emissive.setHex(color || 0).multiplyScalar(color ? k || 0.5 : 1); }));
 }
 
 // ---------- 平行軸歯車式（MT、AMT、ドグミッション） ----------
@@ -405,4 +405,96 @@ function updateEv(it, dt, wMotor) {
   it.motor.rotation.x = it.angle;
   it.mid.rotation.x = -it.angle * EV.p1 / EV.g1;
   it.fin.rotation.x = it.angle * EV.p1 / EV.g1 * EV.p2 / EV.g2;
+}
+
+// ---------- 車に載せる ----------
+// 車（前は +x、study3d.js の makeCar）に、エンジン、つなぎの部品（クラッチ・トルコンなど）、変速機、タイヤへの軸を、実際の並びで置く
+//   FR: エンジン縦置き → 変速機 → プロペラシャフト → 後ろのデフ → 後輪
+//   FF: エンジン横置き → となりの変速機（デフと一体のトランスアクスル）→ ドライブシャフト → 前輪
+//   EV: 後ろの車軸の間に、モーターと減速機とデフ（e-Axle）。電池は床下
+const LAYOUT = {
+  FR: { mech: [0.62, 0.5, 0], driven: 'rear' },
+  FF: { mech: [1.28, 0.52, 0.34], driven: 'front' },
+  EV: { mech: [-1.3, 0.36, 0.12], driven: 'rear' }
+};
+// 軸が x 向きの丸棒（ワールドの座標で、点 a から点 b まで）
+// 回すときは、返した棒の rotation.y（棒の向きの軸のまわり）を変える
+function shaftBetween(parent, a, b, r, color, key) {
+  const from = new THREE.Vector3(...a), to = new THREE.Vector3(...b), len = from.distanceTo(to);
+  const g = new THREE.Group();   // 棒の向き
+  g.position.copy(from).add(to).multiplyScalar(0.5);
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
+  parent.add(g);
+  const m = tagPart(new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 16), mat(color)), key);
+  box(m, r * 2.4, len * 0.1, r * 0.6, 0xd40000, 0, 0, 0);   // 回り方が見える印
+  g.add(m);
+  return m;
+}
+// l: 項目（layout、coupler つなぎの部品の名前、mechScale、mechRot）、build: 変速機の 3D をつくる関数
+function buildOnCar(world, l, build) {
+  const L = LAYOUT[l.layout];
+  world.add(makeRoad(5, 120, -60));
+  const car = makeCar(0x9fb8c8);
+  car.traverse(x => { if (x.material && !car.userData.wheels.some(w => w.children.includes(x))) Object.assign(x.material, { transparent: true, opacity: 0.18, depthWrite: false }); });
+  world.add(car);
+  // 変速機（中の仕組みを、小さくして、向きを合わせて入れる）
+  const g = new THREE.Group();
+  const it = build(g);
+  g.traverse(o => { if (o.isSprite) o.visible = false; });   // 仕組みの中の札は、車の上ではかくす
+  g.scale.setScalar(l.mechScale);
+  g.rotation.y = l.mechRot;
+  g.position.set(...L.mech);
+  world.add(g);
+  const box3 = new THREE.Box3().setFromObject(g), size = box3.getSize(new THREE.Vector3()), c = box3.getCenter(new THREE.Vector3());
+  tagPart(box(world, size.x + 0.06, size.y + 0.06, size.z + 0.06, 0xb0b8bd, c.x, c.y, c.z, { transparent: true, opacity: 0.16, depthWrite: false }), { name: `${l.name}（ケース）`, text: '変速機のケースです。中が見えるように透かしています。' });
+  const spin = { prop: [], shafts: [], wheels: [] }, path = [];
+  const tag = (text, x, y, z) => nameTag(world, text, x, y, z, '#ffd54f', 0.1);
+  if (l.layout === 'FR') {
+    // エンジン（縦置き: クランク軸が車の前後の向き）と、つなぎの部品
+    path.push(tagPart(box(world, 0.6, 0.45, 0.48, 0x55656e, 1.55, 0.62, 0), 'engineLong'));
+    tagPart(box(world, 0.6, 0.14, 0.4, 0x6a737a, 1.55, 0.92, 0), 'engineLong');
+    path.push(tagPart(rod(world, 0.2, 0.12, DARK, 1.18, 0.55, 0), l.couplerKey));
+    tag('エンジン（縦置き）', 1.55, 1.25, 0);
+    tag(l.coupler, 1.18, 0.92, 0.45);
+    // プロペラシャフト → デフ → ドライブシャフト → 後輪
+    spin.prop.push(shaftBetween(world, [c.x - size.x / 2, 0.45, 0], [-1.18, 0.33, 0], 0.03, STEEL, 'propShaft'));
+    path.push(tagPart(box(world, 0.24, 0.22, 0.3, DARK, -1.3, CAR.tire, 0), 'diff'));
+    [-1, 1].forEach(s => spin.shafts.push(shaftBetween(world, [-1.3, CAR.tire, s * 0.15], [-1.3, CAR.tire, s * 0.7], 0.025, STEEL, 'driveShaft')));
+    tag('プロペラシャフト', -0.3, 0.75, 0);
+    tag('デフ', -1.3, 0.7, 0);
+  } else if (l.layout === 'FF') {
+    // エンジン（横置き: クランク軸が車の左右の向き）、となりに変速機。デフは変速機と一体（トランスアクスル）
+    path.push(tagPart(box(world, 0.48, 0.45, 0.6, 0x55656e, 1.35, 0.64, -0.3), 'engineTrans'));
+    tagPart(box(world, 0.4, 0.14, 0.6, 0x6a737a, 1.35, 0.94, -0.3), 'engineTrans');
+    if (l.coupler) path.push(tagPart(rodZ(world, 0.19, 0.1, DARK, 1.3, 0.55, 0.06), l.couplerKey));
+    tag('エンジン（横置き）', 1.35, 1.25, -0.4);
+    if (l.coupler) tag(l.coupler, 1.3, 0.85, 0.06);
+    path.push(tagPart(box(world, 0.2, 0.2, 0.22, DARK, 1.3, CAR.tire, 0.25), 'diff'));
+    [[0.14, 0.7], [0.36, -0.7]].forEach(([from, to]) => spin.shafts.push(shaftBetween(world, [1.3, CAR.tire, 0.25 + Math.sign(to) * 0.11], [1.3, CAR.tire, to], 0.025, STEEL, 'driveShaft')));
+    tag('デフ（変速機と一体）', 1.3, 0.2, 0.9);
+  } else {
+    // 電気自動車: 床下の電池、インバーター、後ろの車軸のモーターと減速機とデフ
+    tagPart(box(world, 2.3, 0.12, 1.3, 0x2b5c7a, 0.1, 0.25, 0), 'evBattery');
+    tagPart(box(world, 0.3, 0.12, 0.3, 0x6a737a, -0.85, 0.5, 0), 'inverter');
+    shaftBetween(world, [-0.85, 0.45, 0.1], [c.x, c.y, c.z], 0.015, 0xe57373, 'wireMain');
+    path.push(tagPart(box(world, 0.2, 0.2, 0.22, DARK, -1.3, CAR.tire, -0.12), 'diff'));
+    [-1, 1].forEach(s => spin.shafts.push(shaftBetween(world, [-1.3, CAR.tire, -0.12 + s * 0.11], [-1.3, CAR.tire, s * 0.7], 0.025, STEEL, 'driveShaft')));
+    tag('電池（床下）', 0.1, 0.55, 0.75);
+    tag('インバーター', -0.85, 0.8, 0);
+  }
+  tag(l.layout === 'EV' ? 'モーター + 減速機 + デフ' : `変速機（${l.name}）`, c.x, c.y + size.y / 2 + 0.25, c.z);
+  // 力を伝えるタイヤ（駆動輪）を光らせる
+  spin.wheels = car.userData.wheels.filter(w => (L.driven === 'front') === (w.position.x > 0));
+  glow(spin.wheels.concat(path, spin.prop, spin.shafts), GLOW.power, 0.22);   // 力の通り道（うすく光らせる）
+  tag(L.driven === 'front' ? '駆動輪（前輪）' : '駆動輪（後輪）', L.driven === 'front' ? 1.3 : -1.3, 0.05, 1.15);
+  it.onCar = spin;
+  return it;
+}
+// 変速機の出力の速さ wOut で、プロペラシャフト、ドライブシャフト、駆動輪を回す（final: 最終減速比）
+function updateOnCar(it, dt, wOut, final) {
+  const s = it.onCar;
+  s.angle = (s.angle || 0) + wOut * dt;
+  s.prop.forEach(m => { m.rotation.y = s.angle; });
+  s.shafts.forEach(m => { m.rotation.y = s.angle / final; });
+  s.wheels.forEach(w => { w.rotation.z = -s.angle / final; });
 }

@@ -433,6 +433,41 @@ const LESSONS_TRANS = [
   }
 ];
 const CV = { sweep: false, r: [0, 0] }, TR = { r: [0, 0] };
+
+// ---------- 車に載せる（ギヤボックスLAB と同じように、車の中での向きとつながりを見る） ----------
+// layout: FR（エンジン縦置き、後輪駆動）、FF（エンジン横置き、前輪駆動）、EV（後ろの車軸にモーター）
+// coupler: エンジンと変速機の間のつなぎの部品、mechScale / mechRot: 変速機の 3D の大きさと向き、out: 変速機の出力の速さ（表示用）
+let TR_CAR = false;
+const CAR_CAM = [[2.4, 2.1, 3.6], [0.3, 0.45, 0]];
+const ON_CAR = {
+  'MT': { layout: 'FR', coupler: 'クラッチ', couplerKey: 'clutchDisc', mechScale: 0.5, mechRot: Math.PI, out: () => (MT.g ? W_IN / GEARS[MT.g - 1][1] : 0),
+    carText: 'FR 車の例です。エンジンを縦（クランク軸が前後の向き）に置き、すぐ後ろにクラッチと MT が一直線に並びます。MT の出力はプロペラシャフトで後ろのデフへ行き、デフで向きを 90° 変えて、ドライブシャフトで左右の後輪を回します。FF 車の MT は、エンジンを横に置き、変速機とデフを1つのケースにまとめた「トランスアクスル」（2軸式）になります。' },
+  'AMT': { layout: 'FF', coupler: 'クラッチ', couplerKey: 'clutchDisc', mechScale: 0.5, mechRot: -Math.PI / 2, out: () => W_IN / GEARS[AM.g - 1][1],
+    carText: '軽自動車などの FF 車の例です。エンジンを横（クランク軸が左右の向き）に置き、そのとなりにクラッチと AMT が並びます。デフは変速機と同じケースの中（トランスアクスル）にあり、長さのちがう左右のドライブシャフトで前輪を回します。' },
+  'DCT': { layout: 'FF', coupler: 'デュアルクラッチ', couplerKey: 'dualClutch', mechScale: 0.5, mechRot: -Math.PI / 2, out: () => 0.6,
+    carText: 'FF 車の例です（フォルクスワーゲンの DSG など）。横置きエンジンのとなりに、2つのクラッチと DCT が並びます。デフは変速機と一体で、ドライブシャフトで前輪を回します。スポーツカーでは、縦置きで後ろの車軸のそばに置く物（トランスアクスル）もあります。' },
+  'トルコン AT': { layout: 'FR', coupler: 'トルクコンバーター', couplerKey: 'torqueConverter', mechScale: 1.3, mechRot: Math.PI / 2, out: () => planetSpeeds(AT_MODES[AT.mode], 1.2)[AT_MODES[AT.mode].out],
+    carText: 'FR 車の例です。縦置きエンジンの後ろに、トルクコンバーター、遊星歯車の変速機が一直線に並び、プロペラシャフトで後ろのデフへつながります。FF 車の AT は、横置きでデフと一体（トランスアクスル）です。' },
+  'ベルト式 CVT': { layout: 'FF', coupler: 'トルクコンバーター', couplerKey: 'torqueConverter', mechScale: 0.7, mechRot: 0, out: () => 1.5 / P.cvt,
+    carText: '日本の小型車に多い FF の例です。横置きエンジン → トルクコンバーター → 前進と後退を切りかえる遊星歯車 → プライマリープーリー → ベルト → セカンダリープーリー → 減速の歯車 → デフ → ドライブシャフト → 前輪 の順に伝わります。2つのプーリーは、車の前後に並びます。' },
+  'トロイダル CVT': { layout: 'FR', coupler: 'トルクコンバーター', couplerKey: 'torqueConverter', mechScale: 1.1, mechRot: Math.PI, out: () => 1.5 / P.tor,
+    carText: '大きなトルクの FR 車に使われた例です（日産のエクストロイド CVT）。縦置きエンジンの後ろに、トルクコンバーターとトロイダル CVT が一直線に並び、プロペラシャフトで後輪へつながります。' },
+  'ハイブリッドの動力分割': { layout: 'FF', coupler: 'ダンパー', couplerKey: 'damper', mechScale: 1.0, mechRot: 0, out: () => P.kmh * RING_PER_KMH / 1000,
+    carText: 'プリウスなどの FF の例です。横置きエンジンのとなりに、クラッチの代わりに振動をやわらげるダンパーがあり、その先に遊星歯車（動力分割）、MG1、MG2 が同じケースに入っています。リングギヤから減速の歯車とデフを通して、前輪を回します。' },
+  '電気自動車の減速機': { layout: 'EV', coupler: '', couplerKey: '', mechScale: 0.7, mechRot: -Math.PI / 2, out: () => motorRpm(P.evKmh) / 1000 / EV_RATIO, final: 1,
+    carText: '後輪駆動の電気自動車の例です。後ろの車軸の間に、モーター、減速機、デフをまとめた e-Axle を横向きに置き、短いドライブシャフトで後輪を回します。電池は床下に平らに並べ、インバーターが電池の直流をモーター用の交流に変えます。前にも置くと4輪駆動になります。' },
+  'ドグミッション': { layout: 'FR', coupler: 'クラッチ', couplerKey: 'clutchDisc', mechScale: 0.5, mechRot: Math.PI, out: () => W_IN / GEARS[DG.g - 1][1],
+    carText: 'FR のレース車の例です。縦置きエンジンの後ろにクラッチとドグミッションが並び、プロペラシャフトで後輪へつながります。重さの配分のため、変速機を後ろの車軸のそばに置く（トランスアクスル）レース車も多くあります。' }
+};
+LESSONS_TRANS.forEach(l => {
+  const c = ON_CAR[l.name], build = l.build3d, update = l.update3d, cam = l.cam;
+  Object.assign(l, c);
+  l.build3d = world => (TR_CAR ? buildOnCar(world, l, build) : build(world));
+  l.update3d = (it, dt) => { update(it, dt); if (it.onCar) updateOnCar(it, dt, c.out(), c.final || CAR.final); };
+  l.cam = () => (TR_CAR ? CAR_CAM : cam);
+  l.actions = (l.actions || []).concat([['車に載せる', () => { TR_CAR = !TR_CAR; setView('3d'); }, () => TR_CAR]]);
+  l.text = l.text.concat([`<b>車への載せ方</b>（「車に載せる」で 3D に出ます）: ${c.carText}`]);
+});
 // CVT の比の帯: 一番低い比と一番高い比の線と、今の比の線
 function cvtChart(now) {
   const line = (i, color, width, name) => ({ name, color, width, points: sample(240, v => v / 3.6 / CAR.tire * i * CAR.final / RPM, 2).filter(([, n]) => n <= 8000) });
