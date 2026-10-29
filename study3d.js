@@ -134,7 +134,7 @@ function build3d() {
   controls.update();
   el('hint3d').textContent = {
     car: `部品をタッチすると、名前と説明が出ます。車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
-    engine: `部品をタッチすると、名前と説明が出ます。ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。`,
+    engine: `部品をタッチすると、名前と説明が出ます。ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。ピストンの上が橙色に光るのが、燃焼（点火順序 1-3-4-2）です。`,
     carEngine: `部品をタッチすると、名前と説明が出ます。車体を透かして、エンジンを3倍の大きさで見せています。エンジンの回転は 1/50、タイヤと道路は 1/${SLOW} の速さです。ドラッグで向きを変えられます。`,
     race: '部品をタッチすると、名前と説明が出ます。札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
@@ -210,6 +210,12 @@ function makeEngine(parent, starter) {
     link: tagPart(box(g, 0.014, ROD_L, 0.014, 0xb0b8bd, pin.x, 0, 0), 'conrod')
   }));
   tagPart(box(g, BORE * 4 + 0.02, 0.16, 0.11, 0x9fb8c8, 0, ROD_L + 0.03, 0, { transparent: true, opacity: 0.18, depthWrite: false }), 'block');
+  // 燃焼の光: ピストンの上の燃焼室。燃えている間だけ、橙色にうすく光る
+  pistons.forEach(pt => {
+    pt.flame = tagPart(new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 1, 24), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0, depthWrite: false })), 'combustion');
+    pt.flame.visible = false;
+    g.add(pt.flame);
+  });
   const eng = { g, crank, fly, pistons, angle: 0 };
   if (starter) {
     // リングギヤ: フライホイールの外周の歯
@@ -238,14 +244,26 @@ function makeEngine(parent, starter) {
   return eng;
 }
 // エンジンを rpm で回す（slow 分の1の速さで見せる）。starter: スターターがかみ合っているか
-function spinEngine(eng, rpm, slow, dt, starter) {
+// 燃焼の順番（点火順序 1 → 3 → 4 → 2）: 各シリンダーが燃えるクランクの角度（2回転 = 4π で1回ずつ）
+const FIRE_AT = [0, 3 * Math.PI, Math.PI, 2 * Math.PI];
+const HEAD_Y = ROD_L + CRANK_R + 0.075;   // 燃焼室の天井（シリンダーヘッドの下の面）の高さ
+// fuel: 燃料を燃やしているか（false なら光らない）、load: アクセルの踏み具合 0〜1（光の強さ）
+function spinEngine(eng, rpm, slow, dt, starter, fuel, load) {
   eng.angle += rpm * RPM / slow * dt;
   eng.crank.rotation.x = eng.angle;
-  eng.pistons.forEach(({ pin, piston, link }) => {
+  eng.pistons.forEach(({ pin, piston, link, flame }, k) => {
+    // ピストンが一番上に来た所で燃え始め、押し下げる間（約 80°）だけ光る
+    const phase = (((eng.angle - FIRE_AT[k]) % (4 * Math.PI)) + 4 * Math.PI) % (4 * Math.PI);
+    const glow = fuel && phase < 1.4 ? (1 - phase / 1.4) * (0.55 + 0.4 * (load === undefined ? 0.6 : load)) : 0;
+    flame.visible = glow > 0.02;
+    flame.material.opacity = glow;
     const a = eng.angle + pin.p;
     const py = CRANK_R * Math.cos(a), pz = CRANK_R * Math.sin(a);
     const top = py + Math.sqrt(ROD_L ** 2 - pz ** 2);
     piston.position.set(pin.x, top + 0.02, 0);
+    const h = Math.max(0.005, HEAD_Y - (top + 0.045));   // ピストンの上の面から、燃焼室の天井まで
+    flame.scale.y = h;
+    flame.position.set(pin.x, top + 0.045 + h / 2, 0);
     link.position.set(pin.x, (py + top) / 2, pz / 2);
     link.rotation.x = Math.atan2(pz, top - py);
   });
@@ -316,7 +334,7 @@ function buildEngine() {
 }
 function updateEngine(dt) {
   const it = view.items, e = lesson().engine3d();
-  spinEngine(it.eng, e.rpm, lesson().slow3d || 50, dt, e.starter);
+  spinEngine(it.eng, e.rpm, lesson().slow3d || 50, dt, e.starter, e.fuel !== false, e.load);
   const c = it.eng.circuit;
   if (c) {
     // キーの位置（OFF → ON → START）。電気が流れている配線を光らせる
@@ -350,7 +368,7 @@ function buildCarEngine() {
 }
 function updateCarEngine(dt) {
   const it = view.items, c = lesson().car3d();
-  spinEngine(it.eng, c.rpm, 50, dt, false);
+  spinEngine(it.eng, c.rpm, 50, dt, false, c.fuel, c.load);
   const ms = c.kmh / 3.6 / SLOW;
   it.road.userData.stripes.position.x = (it.road.userData.stripes.position.x - ms * dt) % 6;
   it.car.userData.wheels.forEach(w => { w.rotation.z -= ms / CAR.tire * dt; });

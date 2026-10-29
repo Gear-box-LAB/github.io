@@ -123,6 +123,7 @@ function stepDrive(dt) {
   // 発進（ほぼ止まっているとき）は、エンストしないように、はじめから半分くらい踏む
   const pedal = R.phase === 'cut' ? 0 : R.phase === 'engage' ? want * Math.max(R.c, Math.abs(R.v) < 3 ? 0.5 : 0) : want;
   const cmd = R.cut ? 0 : Math.max(pedal, idleCmd(n, IDLE_RPM));
+  R.cmd = cmd;   // 燃焼の割合（3D の燃焼の光に使う）
   const te = cmd * combMax(n) - friction(n);   // エンジンがクラッチに出すトルク
   // 走行抵抗（進む向きと逆）とブレーキ
   const resist = Math.sign(R.v) * resistTotal(Math.abs(R.v) * 3.6) + (R.brake ? Math.sign(R.v) * 6000 : 0);
@@ -251,6 +252,7 @@ const LESSONS_RUN = [
       '<b>キーからの電気の流れ</b>（3D の配線が光ります）: キーを ON にすると、ECU と燃料ポンプに電気が入ります。START まで回すと、バッテリー → キー → スターターリレー → マグネットスイッチ と小さな電流が流れます（黄色）。マグネットスイッチがピニオンを押し出し、接点を閉じると、太いケーブルからスターターのモーターに大きな電流が流れます（橙色）。エンジンがかかったら、ECU がインジェクターと点火コイルに、燃料を噴く合図と火花の合図を送り続けます（青）。押しボタン式のエンジンスタートでも、ECU が同じ順番で行っています。',
       '<b>① クランキング</b>: スターターモーターのピニオン（小さい歯車）が飛び出して、フライホイールの外周のリングギヤにかみ合い、クランクを約 200 rpm で回します。エンジンは自分では回り始められないので、外から回して、空気を吸わせて押し縮めます。',
       '<b>② 初爆</b>: 回転が安定すると、ECU（エンジンを制御するコンピューター）が燃料を噴いて点火します。燃焼のトルクは摩擦よりずっと大きく、回すのはエンジン側の部品だけなので、回転が一気に上がります。500 rpm を超えると、スターターは外れます。',
+      '<b>燃焼（爆発）は、始動の後もずっと続く</b>: 初爆は「最初の1回」のことです。エンジンが回っている間は、どのシリンダーも「吸気 → 圧縮 → 燃焼 → 排気」（4ストローク）をくり返し、2回転に1回ずつ燃えます。4気筒では順番（1 → 3 → 4 → 2）に、1回転に2回燃えるので、アイドル 750 rpm でも1秒に25回です。3D では、燃えているシリンダーのピストンの上が、橙色にうすく光ります。キーを切ると、燃焼が止まって光らなくなります。',
       '<b>③ 吹け上がり</b>: 始動直後は、エンストしないように燃料と空気を多めに入れます（始動増量）。その分、アイドルより高く吹け上がります。キーを回した直後の「ブォン」という音の正体です。',
       '<b>④ アイドル</b>: その後、ECU が燃料と空気を減らし、目標の回転数に落ち着かせます。冷えているときは、エンジンと排気をきれいにする触媒を早く暖めるため、目標を高く（ファストアイドル）します。温度のスライダーで比べてください。'
     ],
@@ -267,7 +269,7 @@ const LESSONS_RUN = [
         { name: `アイドルの目標 ${P.warm ? IDLE_RPM : COLD_IDLE} rpm`, color: 'rgba(255,255,255,0.6)', points: [[0, P.warm ? IDLE_RPM : COLD_IDLE], [5, P.warm ? IDLE_RPM : COLD_IDLE]], dash: [4, 4], width: 1 }],
       dots: S.events
     }),
-    engine3d: () => ({ rpm: S.w / RPM, torque: S.torque, starter: S.starter, key: S.phase === 'off' ? 'off' : S.starter ? 'start' : 'on', fuel: S.phase === 'fire' || S.phase === 'idle', text: `${n0(S.w / RPM)} rpm　${PHASE_TEXT[S.phase].split('（')[0]}` }),
+    engine3d: () => ({ rpm: S.w / RPM, torque: S.torque, starter: S.starter, key: S.phase === 'off' ? 'off' : S.starter ? 'start' : 'on', fuel: S.phase === 'fire' || S.phase === 'idle', load: S.cmd, text: `${n0(S.w / RPM)} rpm　${PHASE_TEXT[S.phase].split('（')[0]}` }),
     readout: () => `${PHASE_TEXT[S.phase]}　${n0(S.w / RPM)} rpm（${warmText(P.warm)}エンジン）` + (S.phase !== 'off' ? `、一番高い回転数 ${n0(S.peak)} rpm` : '')
   },
   {
@@ -375,7 +377,7 @@ const LESSONS_RUN = [
         dots: R.marks.map(m => ({ x: m.x - t0, y: m.y, label: m.label }))
       };
     },
-    car3d: () => ({ rpm: R.w / RPM, kmh: R.v * 3.6, text: `${gearName(R.g)}　${n0(R.w / RPM)} rpm　${n0(Math.abs(R.v) * 3.6)} km/h` }),
+    car3d: () => ({ rpm: R.w / RPM, kmh: R.v * 3.6, fuel: R.cmd > 0.01, load: R.cmd, text: `${gearName(R.g)}　${n0(R.w / RPM)} rpm　${n0(Math.abs(R.v) * 3.6)} km/h` }),
     readout: () => `<b>${gearName(R.g)}</b>　エンジン ${n0(R.w / RPM)} rpm、車速 ${n0(R.v * 3.6)} km/h、アクセル ${n0((R.script ? R.pedal * 100 : P.pedal))}%、クラッチ: ${clutchText()}${R.cut ? '、レブリミッター（燃料カット）' : ''}<br>${R.msg}`
   }
 ];
