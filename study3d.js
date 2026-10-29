@@ -5,7 +5,7 @@
 //   'race'   加速くらべの4台（engine.js の racers）
 
 const SLOW = 10;   // 動きは 1/10 の速さで見せる（エンジンは 1/50）
-const view = { want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [], markSpec: null, mark: null };   // markSpec: 数式の考え方の印（explain.js）   // want: 選んだ表示、mode: 今の表示
+const view = { labelScale: 1, want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [], markSpec: null, mark: null };   // markSpec: 数式の考え方の印（explain.js）   // want: 選んだ表示、mode: 今の表示
 
 // ---------- 準備（3D を初めて開いたときに1回） ----------
 function init3d() {
@@ -48,23 +48,41 @@ function label(text, color) {
   const canvas = document.createElement('canvas');
   canvas.width = 512; canvas.height = 64;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
-  sprite.userData = { canvas, color: color || '#ffffff', text: '' };
+  sprite.userData = { canvas, color: color || '#ffffff', text: null, h: 1 };
   setLabel(sprite, text);
   return sprite;
+}
+// 札の高さ h（3Dの長さ）を決める。横の長さは、文字の長さに合わせて setLabel が決める
+function sizeLabel(sprite, h) {
+  sprite.userData.h = h;
+  const s = h * view.labelScale;   // スマホでカメラを引いたときは、札を少し大きくして読みやすくする
+  sprite.scale.set(s * sprite.userData.canvas.width / 64, s, 1);
 }
 function setLabel(sprite, text) {
   if (sprite.userData.text === text) return;
   sprite.userData.text = text;
-  const g = sprite.userData.canvas.getContext('2d');
-  g.clearRect(0, 0, 512, 64);
+  let canvas = sprite.userData.canvas, g = canvas.getContext('2d');
   g.font = 'bold 34px sans-serif';
   const w = g.measureText(text).width + 24;
+  // 文字が入りきらないときは、canvas を広げる（512 → 1024 → 2048）。文字が見切れないように
+  const width = [512, 1024, 2048].find(x => x >= w + 8) || 2048;
+  if (width !== canvas.width) {
+    canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = 64;
+    sprite.userData.canvas = canvas;
+    sprite.material.map.dispose();
+    sprite.material.map = new THREE.CanvasTexture(canvas);
+    g = canvas.getContext('2d');
+    g.font = 'bold 34px sans-serif';
+  }
+  g.clearRect(0, 0, width, 64);
   g.fillStyle = 'rgba(20, 35, 43, 0.75)';
-  g.fillRect(256 - w / 2, 4, w, 56);
+  g.fillRect(width / 2 - w / 2, 4, w, 56);
   g.fillStyle = sprite.userData.color;
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(text, 256, 33);
+  g.fillText(text, width / 2, 33);
   sprite.material.map.needsUpdate = true;
+  sizeLabel(sprite, sprite.userData.h);
 }
 
 // 車（前は +x）。タイヤは回る
@@ -103,10 +121,15 @@ function build3d() {
   view.scene = l.scene;
   view.items = [];
   scene.add(view.world);
-  ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
   const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
+  // 縦長の画面（スマホ）では、札が左右で見切れないように、カメラを少し引く
+  const aspect = el('scene3d').clientWidth / Math.max(1, el('scene3d').clientHeight);
+  const pull = aspect < 1.2 ? Math.min(1.9, 1.2 / aspect) : 1;
+  camera.position.sub(controls.target).multiplyScalar(pull).add(controls.target);
+  view.labelScale = Math.sqrt(pull);
+  ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
   controls.update();
   el('hint3d').textContent = {
     car: `車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
@@ -129,7 +152,7 @@ function buildCar() {
   const arrows = lesson().arrows().map(([name, , color, spot]) => {
     const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, color, 0.3, 0.22);
     const tag = label(name, '#' + new THREE.Color(color).getHexString());
-    tag.scale.set(2.4, 0.3, 1);
+    sizeLabel(tag, 0.3);
     tilt.add(arrow, tag);
     return { arrow, tag, spot };
   });
@@ -234,7 +257,7 @@ function buildEngine() {
   const eng = makeEngine(view.world, l.starter);
   const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.27, 0.15, 0), 0.1, 0xf0a81c, 0.04, 0.035);
   const tag = label('');
-  tag.scale.set(0.4, 0.05, 1);
+  sizeLabel(tag, 0.05);
   tag.position.set(0.05, 0.32, 0);
   view.world.add(arrow, tag);
   view.items = { eng, crank: eng.crank, fly: eng.fly, pistons: eng.pistons, arrow, tag };
@@ -258,7 +281,7 @@ function buildCarEngine() {
   eng.g.position.set(1.2, 0.55, 0);
   eng.g.rotation.y = Math.PI;   // フライホイールを後ろ（変速機の側）に向ける
   const tag = label('');
-  tag.scale.set(4, 0.5, 1);
+  sizeLabel(tag, 0.5);
   tag.position.set(0, 2.4, 0);
   view.world.add(road, car, tag);
   view.items = { road, car, eng, crank: eng.crank, fly: eng.fly, pistons: eng.pistons, tag };
@@ -280,7 +303,7 @@ function buildRace() {
     box(view.world, 0.4, 0.04, 17, 0xffffff, x, 0, 0);
     if (x % 500) continue;   // 距離の札は 500 m ごと
     const tag = label(x === GOAL ? `ゴール ${x} m` : `${x} m`);
-    tag.scale.set(8, 1, 1);
+    sizeLabel(tag, 1);
     tag.position.set(x, 0.8, -10);
     view.world.add(tag);
   }
@@ -288,7 +311,7 @@ function buildRace() {
     const car = makeCar(new THREE.Color(r.color).getHex());
     car.position.z = (k - (racers.length - 1) / 2) * 3.2;
     const tag = label(r.short, r.color);
-    tag.scale.set(4, 0.5, 1);
+    sizeLabel(tag, 0.5);
     view.world.add(car, tag);
     return { car, tag };
   });
@@ -337,6 +360,7 @@ function buildMark() {
   if (view.mark) { view.world.remove(view.mark.group); view.mark.arrows.forEach(a => a.setColor(a.userData.color)); view.mark.mats.forEach(m => m.emissive.setRGB(0, 0, 0)); }
   view.mark = null;
   const m = view.markSpec;
+  if (view.mode === '3d') el('hint3d').hidden = false;
   if (!m || view.scene === 'race') return;
   const group = new THREE.Group();
   view.world.add(group);
@@ -348,17 +372,18 @@ function buildMark() {
   });
   const big = view.scene === 'car' || view.scene === 'carEngine';
   const tag = label(m.text || '', '#ffd54f');
-  tag.scale.set(big ? 3.6 : 0.42, big ? 0.45 : 0.052, 1);
+  sizeLabel(tag, big ? 0.45 : 0.052);
   group.add(tag);
   // 重力 m × g（真下）と、そのうち路面を押す分 m × g × cos θ（路面に垂直）
   const gravity = m.gravity && big ? [0xffffff, 0xffd54f].map(color => {
     const a = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 1, color, 0.3, 0.22);
     const t = label('', '#' + new THREE.Color(color).getHexString());
-    t.scale.set(3.2, 0.4, 1);
+    sizeLabel(t, 0.4);
     group.add(a, t);
     return { a, t };
   }) : null;
   view.mark = { group, targets, mats, arrows, tag, gravity, time: 0 };
+  el('hint3d').hidden = true;   // 印を出している間は、左上の説明を隠す（札と重ならないように）
 }
 
 function updateMark(dt) {
@@ -373,7 +398,7 @@ function updateMark(dt) {
   mk.targets.forEach(o => box3.expandByObject(o));
   if (!box3.isEmpty()) {
     const c = box3.getCenter(new THREE.Vector3());
-    mk.tag.position.set(c.x, box3.max.y + (view.scene === 'engine' ? 0.05 : 0.5), c.z);
+    mk.tag.position.set(c.x, box3.max.y + (view.scene === 'engine' ? 0.05 : 1.0), c.z);   // 矢印の札と重ならない高さ
   } else mk.tag.position.set(0, view.scene === 'engine' ? 0.4 : 3, 0);
   setLabel(mk.tag, view.markSpec.text || '');
   if (mk.gravity) {

@@ -677,18 +677,19 @@ function pulseMark(dt) {
 // 部品の名前の札: 3Dの位置を、画面の位置に直して置く
 function placeTags() {
   const rect = canvas.getBoundingClientRect();
-  tags.forEach((t, k) => {
-    const tag = el('tags').children[k];
-    if (!tag) return;
-    const v = new THREE.Vector3(t.x, t.y, 0.1).project(camera);
-    tag.style.left = `${(v.x + 1) / 2 * rect.width}px`;
-    tag.style.top = `${(1 - v.y) / 2 * rect.height}px`;
-  });
-  if (markNow) {   // 考え方の札
-    const v = new THREE.Vector3(markNow.x, markNow.y, 0.1).project(camera);
-    el('whyTag').style.left = `${(v.x + 1) / 2 * rect.width}px`;
-    el('whyTag').style.top = `${(1 - v.y) / 2 * rect.height}px`;
-  }
+  tags.forEach((t, k) => placeTag(el('tags').children[k], t.x, t.y, rect, 0.5));
+  if (markNow) placeTag(el('whyTag'), markNow.x, markNow.y, rect, 1);   // 考え方の札
+}
+// 札を 3D の位置 (x, y) に置く。札の文字が図からはみ出して見切れないように、図の中に収める
+// up: 札の下の端を位置に合わせる割合（0.5 = 札の真ん中、1 = 札の下の端）
+function placeTag(tag, x, y, rect, up) {
+  if (!tag) return;
+  const v = new THREE.Vector3(x, y, 0.1).project(camera);
+  const w = tag.offsetWidth, h = tag.offsetHeight;
+  const left = Math.min(Math.max((v.x + 1) / 2 * rect.width, w / 2 + 4), rect.width - w / 2 - 4);
+  const top = Math.min(Math.max((1 - v.y) / 2 * rect.height, h * up + 4), rect.height - h * (1 - up) - 4);
+  tag.style.left = `${left}px`;
+  tag.style.top = `${top}px`;
 }
 
 function showReadout() {
