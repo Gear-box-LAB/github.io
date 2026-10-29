@@ -103,14 +103,15 @@ function build3d() {
   view.scene = l.scene;
   view.items = [];
   scene.add(view.world);
-  if (l.scene === 'car') buildCar(); else if (l.scene === 'engine') buildEngine(); else buildRace();
-  const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: [[0.75, 0.55, 0.95], [0.08, 0.12, 0]], race: [[-12, 6, 17], [-2, 0, 0]] }[l.scene];
+  ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
+  const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
   controls.update();
   el('hint3d').textContent = {
     car: `車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
-    engine: 'ドラッグで向きを変えられます。回転は 1/50 の速さです。橙の矢印の長さがトルクの大きさです。',
+    engine: `ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。`,
+    carEngine: `車体を透かして、エンジンを3倍の大きさで見せています。エンジンの回転は 1/50、タイヤと道路は 1/${SLOW} の速さです。ドラッグで向きを変えられます。`,
     race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
   buildMark();
@@ -157,8 +158,11 @@ function updateCar(dt) {
 
 // 4気筒エンジン（クランク軸は x 向き）。ピストンはクランクの回転で上下する
 const CRANK_R = 0.045, ROD_L = 0.14, BORE = 0.09;
-function buildEngine() {
-  const g = view.world;
+const STARTER_RATIO = 12;   // スターターのピニオン1回転に対して、リングギヤ（クランク）は 1/12 回転
+// エンジンの形をつくる。starter: true なら、フライホイールのリングギヤとスターターモーターも付ける
+function makeEngine(parent, starter) {
+  const g = new THREE.Group();
+  parent.add(g);
   const crank = new THREE.Group();
   g.add(crank);
   rod(crank, 0.018, 0.42, 0x8e979c, 0.02, 0, 0);
@@ -180,27 +184,92 @@ function buildEngine() {
     link: box(g, 0.014, ROD_L, 0.014, 0xb0b8bd, pin.x, 0, 0)
   }));
   box(g, BORE * 4 + 0.02, 0.16, 0.11, 0x9fb8c8, 0, ROD_L + 0.03, 0, { transparent: true, opacity: 0.18, depthWrite: false });
-  const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.27, 0.15, 0), 0.1, 0xf0a81c, 0.04, 0.035);
-  const tag = label('');
-  tag.scale.set(0.4, 0.05, 1);
-  tag.position.set(0.05, 0.32, 0);
-  g.add(arrow, tag);
-  view.items = { crank, fly, pistons, arrow, tag, angle: 0 };
+  const eng = { g, crank, fly, pistons, angle: 0 };
+  if (starter) {
+    // リングギヤ: フライホイールの外周の歯
+    for (let k = 0; k < 72; k++) {
+      const a = k / 72 * Math.PI * 2;
+      box(fly, 0.022, 0.012, 0.008, 0x6a737a, 0, 0.146 * Math.cos(a), 0.146 * Math.sin(a)).rotation.x = -a;
+    }
+    // スターターモーター（本体、上にマグネットスイッチ）と、出入りするピニオン
+    const motor = new THREE.Group();
+    motor.position.set(0, -0.172, 0);
+    g.add(motor);
+    rod(motor, 0.04, 0.16, 0x3c454b, 0.37, 0, 0);
+    rod(motor, 0.022, 0.12, 0xb0b8bd, 0.37, 0.055, 0);
+    const shaft = rod(motor, 0.007, 0.1, 0x8e979c, 0.29, 0, 0);
+    const pinion = new THREE.Group();
+    motor.add(pinion);
+    rod(pinion, 0.02, 0.022, 0xc9a24a, 0, 0, 0);
+    for (let k = 0; k < 9; k++) {
+      const a = k / 9 * Math.PI * 2;
+      box(pinion, 0.022, 0.01, 0.007, 0xc9a24a, 0, 0.024 * Math.cos(a), 0.024 * Math.sin(a)).rotation.x = -a;
+    }
+    Object.assign(eng, { motor, pinion, shaft, pinionX: 0.31 });
+  }
+  return eng;
 }
-function updateEngine(dt) {
-  const it = view.items, e = lesson().engine3d();
-  it.angle += e.rpm * RPM / 50 * dt;
-  it.crank.rotation.x = it.angle;
-  it.pistons.forEach(({ pin, piston, link }) => {
-    const a = it.angle + pin.p;
+// エンジンを rpm で回す（slow 分の1の速さで見せる）。starter: スターターがかみ合っているか
+function spinEngine(eng, rpm, slow, dt, starter) {
+  eng.angle += rpm * RPM / slow * dt;
+  eng.crank.rotation.x = eng.angle;
+  eng.pistons.forEach(({ pin, piston, link }) => {
+    const a = eng.angle + pin.p;
     const py = CRANK_R * Math.cos(a), pz = CRANK_R * Math.sin(a);
     const top = py + Math.sqrt(ROD_L ** 2 - pz ** 2);
     piston.position.set(pin.x, top + 0.02, 0);
     link.position.set(pin.x, (py + top) / 2, pz / 2);
     link.rotation.x = Math.atan2(pz, top - py);
   });
-  it.arrow.setLength(Math.max(0.05, e.torque / 200 * 0.3), 0.04, 0.035);
+  if (eng.pinion) {
+    // マグネットスイッチがピニオンを押し出して、リングギヤにかみ合わせる。かみ合っている間は、クランクの 12 倍で逆に回る
+    eng.pinionX += ((starter ? 0.25 : 0.31) - eng.pinionX) * Math.min(1, dt * 12);
+    eng.pinion.position.x = eng.pinionX;
+    if (starter) eng.pinion.rotation.x = -eng.angle * STARTER_RATIO;
+  }
+}
+
+function buildEngine() {
+  const l = lesson();
+  const eng = makeEngine(view.world, l.starter);
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.27, 0.15, 0), 0.1, 0xf0a81c, 0.04, 0.035);
+  const tag = label('');
+  tag.scale.set(0.4, 0.05, 1);
+  tag.position.set(0.05, 0.32, 0);
+  view.world.add(arrow, tag);
+  view.items = { eng, crank: eng.crank, fly: eng.fly, pistons: eng.pistons, arrow, tag };
+}
+function updateEngine(dt) {
+  const it = view.items, e = lesson().engine3d();
+  spinEngine(it.eng, e.rpm, lesson().slow3d || 50, dt, e.starter);
+  it.arrow.visible = Math.abs(e.torque) > 0.5;
+  it.arrow.setDirection(new THREE.Vector3(0, 0, Math.sign(e.torque) || 1));   // トルクの向き（− は回転を止める向き）
+  it.arrow.setLength(Math.max(0.05, Math.abs(e.torque) / 200 * 0.3), 0.04, 0.035);
   setLabel(it.tag, e.text);
+}
+
+// 車の中のエンジン（走りながらの操作）: 車体を透かして、前にエンジン（3 倍の大きさ）を置く
+function buildCarEngine() {
+  const road = makeRoad(5, 120, -60);
+  const car = makeCar(0x9fb8c8);
+  car.traverse(x => { if (x.material && !car.userData.wheels.some(w => w.children.includes(x))) Object.assign(x.material, { transparent: true, opacity: 0.22, depthWrite: false }); });
+  const eng = makeEngine(car, false);
+  eng.g.scale.setScalar(3);
+  eng.g.position.set(1.2, 0.55, 0);
+  eng.g.rotation.y = Math.PI;   // フライホイールを後ろ（変速機の側）に向ける
+  const tag = label('');
+  tag.scale.set(4, 0.5, 1);
+  tag.position.set(0, 2.4, 0);
+  view.world.add(road, car, tag);
+  view.items = { road, car, eng, crank: eng.crank, fly: eng.fly, pistons: eng.pistons, tag };
+}
+function updateCarEngine(dt) {
+  const it = view.items, c = lesson().car3d();
+  spinEngine(it.eng, c.rpm, 50, dt, false);
+  const ms = c.kmh / 3.6 / SLOW;
+  it.road.userData.stripes.position.x = (it.road.userData.stripes.position.x - ms * dt) % 6;
+  it.car.userData.wheels.forEach(w => { w.rotation.z -= ms / CAR.tire * dt; });
+  setLabel(it.tag, c.text);
 }
 
 // 加速くらべ: 4本の車線に4台。x は走った距離 (m)
@@ -255,7 +324,7 @@ function partsOf(name) {
     if (name === 'body') return [it.car.userData.body];
     return it.arrows.filter(a => a.spot === name && a.arrow.visible).map(a => a.arrow);
   }
-  if (view.scene === 'engine') return { pistons: it.pistons.map(x => x.piston), crank: [it.crank], flywheel: [it.fly], torque: [it.arrow] }[name] || [];
+  if (view.scene === 'engine' || view.scene === 'carEngine') return { pistons: it.pistons.map(x => x.piston), crank: [it.crank], flywheel: [it.fly], torque: it.arrow ? [it.arrow] : [], starter: it.eng.motor ? [it.eng.motor] : [], wheels: it.car ? it.car.userData.wheels : [] }[name] || [];
   return [];
 }
 
@@ -277,7 +346,7 @@ function buildMark() {
     if (o.setColor) { o.userData.color = o.line.material.color.getHex(); arrows.push(o); return; }   // 力の矢印は、点滅させる
     o.traverse(x => { if (x.material && x.material.emissive) mats.push(x.material); });             // 部品は、橙色に光らせる
   });
-  const big = view.scene === 'car';
+  const big = view.scene === 'car' || view.scene === 'carEngine';
   const tag = label(m.text || '', '#ffd54f');
   tag.scale.set(big ? 3.6 : 0.42, big ? 0.45 : 0.052, 1);
   group.add(tag);
@@ -304,8 +373,8 @@ function updateMark(dt) {
   mk.targets.forEach(o => box3.expandByObject(o));
   if (!box3.isEmpty()) {
     const c = box3.getCenter(new THREE.Vector3());
-    mk.tag.position.set(c.x, box3.max.y + (view.scene === 'car' ? 0.5 : 0.05), c.z);
-  } else mk.tag.position.set(0, view.scene === 'car' ? 3 : 0.4, 0);
+    mk.tag.position.set(c.x, box3.max.y + (view.scene === 'engine' ? 0.05 : 0.5), c.z);
+  } else mk.tag.position.set(0, view.scene === 'engine' ? 0.4 : 3, 0);
   setLabel(mk.tag, view.markSpec.text || '');
   if (mk.gravity) {
     const { tilt, car } = view.items, theta = tilt.rotation.z, mass = P.mass || CAR.mass;
@@ -341,7 +410,7 @@ function setView(want) {
 // 毎フレーム（study.js のループから呼ぶ）
 function frame3d(dt) {
   if (view.mode !== '3d') return;
-  if (view.scene === 'car') updateCar(dt); else if (view.scene === 'engine') updateEngine(dt); else updateRace();
+  ({ car: updateCar, engine: updateEngine, race: updateRace, carEngine: updateCarEngine })[view.scene](dt);
   updateMark(dt);
   view.three.renderer.render(view.three.scene, view.three.camera);
 }

@@ -123,9 +123,12 @@ const driveLine = g => sample(speedAt(g, REDLINE), v => driveAt(g, v), 1).filter
 // ---------- 段階の切り替え（drive.js / engine.js から呼ぶ） ----------
 let LESSONS = [];
 const state = { step: 1, tab: 'structure', running: false };
+let NOTE = '車は 1,000 kg、タイヤの半径 0.315 m、最終減速比 4.1、伝達効率 0.92 です。変速比はギヤボックスLABの初期値、エンジンは 2.0 L の自然吸気を想定した説明用の仮の値です。';
 
-function startCourse(lessons) {
+// lessons: 項目の一覧。note: 数式タブの最後に出す、値の注意書き（なければ上の NOTE）
+function startCourse(lessons, note) {
   LESSONS = lessons;
+  if (note) NOTE = note;
   el('steps').addEventListener('click', e => { if (e.target.dataset.step) showStep(Number(e.target.dataset.step)); });
   el('prev').addEventListener('click', () => showStep(state.step - 1));
   el('next').addEventListener('click', () => showStep(state.step + 1));
@@ -141,6 +144,14 @@ function startCourse(lessons) {
     renderLesson();
   });
   el('run').addEventListener('click', () => { const l = lesson(); if (l.start) { l.start(); state.running = true; } });
+  // 項目ごとのボタン（actions: [[名前, 押したときの動き, 今選ばれているか]]）
+  el('controls').addEventListener('click', e => {
+    const k = e.target.dataset.action;
+    if (k === undefined) return;
+    lesson().actions[k][1]();
+    if (lesson().start) state.running = true;
+    draw();
+  });
   el('showChart').addEventListener('click', () => { setView('chart'); renderLesson(); });
   el('show3d').addEventListener('click', () => setView('3d'));
   new ResizeObserver(draw).observe(el('chart'));
@@ -149,7 +160,9 @@ function startCourse(lessons) {
   const loop = now => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (state.running) { state.running = lesson().tick(dt); draw(); if (!state.running) renderLesson(); }
+    // live の項目（走りながらの操作）は、いつも動かす
+    if (lesson().live) { lesson().tick(dt); draw(); }
+    else if (state.running) { state.running = lesson().tick(dt); draw(); if (!state.running) renderLesson(); }
     frame3d(dt);
     requestAnimationFrame(loop);
   };
@@ -163,6 +176,7 @@ function draw() {
   const l = lesson();
   if (view.mode === 'chart') drawChart(l.chart());
   el('readout').innerHTML = l.readout ? l.readout() : '';
+  (l.actions || []).forEach((a, k) => { const b = el('controls').querySelector(`[data-action="${k}"]`); if (b) b.classList.toggle('current', !!(a[2] && a[2]())); });
 }
 
 function showStep(step) {
@@ -174,7 +188,8 @@ function showStep(step) {
   const l = lesson();
   el('steps').innerHTML = LESSONS.map((x, i) =>
     `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1}. ${x.name}</button>`).join('');
-  el('controls').innerHTML = (l.controls || []).map(([label, key, min, max, step]) =>
+  el('controls').innerHTML = (l.actions || []).map((a, k) => `<button type="button" data-action="${k}">${a[0]}</button>`).join('')
+    + (l.controls || []).map(([label, key, min, max, step]) =>
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
   el('run').textContent = l.runLabel || '';
@@ -190,7 +205,7 @@ function renderLesson() {
   el('lessonOutput').innerHTML = state.tab === 'structure'
     ? l.text.map(t => `<p>${t}</p>`).join('')
     : formulaHTML(l.formula(), !!l.scene && view.mode === 'chart')
-      + `<p class="note">${l.symbols || ''} 車は 1,000 kg、タイヤの半径 0.315 m、最終減速比 4.1、伝達効率 0.92 です。変速比はギヤボックスLABの初期値、エンジンは 2.0 L の自然吸気を想定した説明用の仮の値です。</p>`;
+      + `<p class="note">${l.symbols || ''} ${NOTE}</p>`;
   el('prev').disabled = state.step === 1;
   el('next').disabled = state.step === LESSONS.length;
   draw();
