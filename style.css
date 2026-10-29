@@ -195,6 +195,11 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .why { margin-top: 6px; padding: 8px 10px; border-left: 4px solid var(--power); background: rgba(240, 168, 28, 0.08); font-size: 14px; line-height: 1.7; cursor: auto; }
 .why button { display: block; margin-top: 8px; font-size: 13px; }
 /* 3D の図の、考え方の札（光らせた部品のそば） */
+/* 3D の部品をタッチしたときの説明（partinfo.js） */
+.partInfo { position: absolute; z-index: 3; width: min(320px, calc(100% - 16px)); padding: 8px 10px; background: var(--panel); color: var(--ink); border-radius: 4px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); font-size: 13px; line-height: 1.6; }
+.partInfo p { margin: 4px 0 0; }
+.partHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.partHead button { font-size: 12px; padding: 0 8px; }
 .tag.whyMark { position: absolute; transform: translate(-50%, -100%); white-space: normal; max-width: min(90%, 420px); text-align: center; color: var(--ink); background: #ffd54f; font-weight: 700; pointer-events: none; }
 
 /* 入力欄と表 */

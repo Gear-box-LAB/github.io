@@ -240,14 +240,15 @@ const WHY = {
 const LESSONS_RUN = [
   {
     name: '始動と吹け上がり', title: 'キーを回すと、なぜ回転が一度高く吹け上がるのか',
-    scene: 'engine', starter: true, slow3d: 10,
+    scene: 'engine', starter: true, circuit: true, slow3d: 10,
     controls: [['エンジンの温度', 'warm', 0, 1, 1, warmText]],
     runLabel: 'キーを START に回す',
     start: startUp,
     tick: tickStart,
     reset: () => { S = Object.assign(newEngine(0), { phase: 'off' }); },
     text: [
-      'キーを START に回すと、次の順番でエンジンがかかります。「キーを START に回す」を押して、グラフと 3D で確かめてください（実際の 1/3 の速さで見せています）。',
+      'キーを START に回すと、次の順番でエンジンがかかります。「キーを START に回す」を押して、グラフと 3D で確かめてください（実際の 1/3 の速さで見せています）。3D では、部品をタッチすると名前と説明が出ます。',
+      '<b>キーからの電気の流れ</b>（3D の配線が光ります）: キーを ON にすると、ECU と燃料ポンプに電気が入ります。START まで回すと、バッテリー → キー → スターターリレー → マグネットスイッチ と小さな電流が流れます（黄色）。マグネットスイッチがピニオンを押し出し、接点を閉じると、太いケーブルからスターターのモーターに大きな電流が流れます（橙色）。エンジンがかかったら、ECU がインジェクターと点火コイルに、燃料を噴く合図と火花の合図を送り続けます（青）。押しボタン式のエンジンスタートでも、ECU が同じ順番で行っています。',
       '<b>① クランキング</b>: スターターモーターのピニオン（小さい歯車）が飛び出して、フライホイールの外周のリングギヤにかみ合い、クランクを約 200 rpm で回します。エンジンは自分では回り始められないので、外から回して、空気を吸わせて押し縮めます。',
       '<b>② 初爆</b>: 回転が安定すると、ECU（エンジンを制御するコンピューター）が燃料を噴いて点火します。燃焼のトルクは摩擦よりずっと大きく、回すのはエンジン側の部品だけなので、回転が一気に上がります。500 rpm を超えると、スターターは外れます。',
       '<b>③ 吹け上がり</b>: 始動直後は、エンストしないように燃料と空気を多めに入れます（始動増量）。その分、アイドルより高く吹け上がります。キーを回した直後の「ブォン」という音の正体です。',
@@ -266,12 +267,12 @@ const LESSONS_RUN = [
         { name: `アイドルの目標 ${P.warm ? IDLE_RPM : COLD_IDLE} rpm`, color: 'rgba(255,255,255,0.6)', points: [[0, P.warm ? IDLE_RPM : COLD_IDLE], [5, P.warm ? IDLE_RPM : COLD_IDLE]], dash: [4, 4], width: 1 }],
       dots: S.events
     }),
-    engine3d: () => ({ rpm: S.w / RPM, torque: S.torque, starter: S.starter, text: `${n0(S.w / RPM)} rpm　${PHASE_TEXT[S.phase].split('（')[0]}` }),
+    engine3d: () => ({ rpm: S.w / RPM, torque: S.torque, starter: S.starter, key: S.phase === 'off' ? 'off' : S.starter ? 'start' : 'on', fuel: S.phase === 'fire' || S.phase === 'idle', text: `${n0(S.w / RPM)} rpm　${PHASE_TEXT[S.phase].split('（')[0]}` }),
     readout: () => `${PHASE_TEXT[S.phase]}　${n0(S.w / RPM)} rpm（${warmText(P.warm)}エンジン）` + (S.phase !== 'off' ? `、一番高い回転数 ${n0(S.peak)} rpm` : '')
   },
   {
     name: 'スターターモーター', title: 'スターターが回る仕組みと、クランキングの回転数が決まる所',
-    scene: 'engine', starter: true, slow3d: 10,
+    scene: 'engine', starter: true, circuit: true, slow3d: 10,
     controls: [['電池の電圧 (V)', 'volt', 8, 13, 0.5], ['エンジンの温度', 'warm', 0, 1, 1, warmText]],
     runLabel: 'スターターだけ回す（燃料なし）',
     start: startCrank,
@@ -303,12 +304,12 @@ const LESSONS_RUN = [
         dots: [{ x: n, y: friction(n), label: `つり合う所 ${n} rpm` }].concat(C.t > 0 ? [{ x: Math.max(0, now), y: starterTorque(now, P.volt), color: '#f0a81c', label: `今 ${n0(now)} rpm` }] : [])
       };
     },
-    engine3d: () => ({ rpm: C.w / RPM, torque: C.torque, starter: C.starter, text: C.t > 0 ? `クランキング ${n0(C.w / RPM)} rpm` : 'スターター待ち' }),
+    engine3d: () => ({ rpm: C.w / RPM, torque: C.torque, starter: C.starter, key: C.starter ? 'start' : 'off', fuel: false, text: C.t > 0 ? `クランキング ${n0(C.w / RPM)} rpm` : 'スターター待ち' }),
     readout: () => `${P.volt} V、${warmText(P.warm)}エンジン: クランキングの回転数は約 ${crankingRpm(P.volt)} rpm` + (C.t > 0 ? `（今 ${n0(C.w / RPM)} rpm）` : '')
   },
   {
     name: 'エンジンが止まるまで', title: 'キーを OFF にすると、摩擦で回転が下がって止まる',
-    scene: 'engine', slow3d: 10,
+    scene: 'engine', starter: true, circuit: true, slow3d: 10,
     controls: [['キーを切るときの回転数 (rpm)', 'stopRpm', 750, 3000, 250], ['フライホイールの重さ（J, kg·m²）', 'flyJ', 0.1, 0.3, 0.02]],
     runLabel: 'キーを OFF にする',
     start: startStop,
@@ -335,7 +336,7 @@ const LESSONS_RUN = [
       series: [{ name: 'エンジン回転数', color: '#f0a81c', points: D.points }, { name: '', color: 'rgba(255,255,255,0.5)', points: [[0, 0], [8, 0]], width: 1 }],
       dots: D.events
     }),
-    engine3d: () => ({ rpm: D.t > 0 ? D.w / RPM : P.stopRpm, torque: D.t > 0 ? D.torque : 0, text: D.stopped ? '停止' : D.t > 0 ? `${n0(D.w / RPM)} rpm（燃料なし）` : `${P.stopRpm} rpm で回転中` }),
+    engine3d: () => ({ rpm: D.t > 0 ? D.w / RPM : P.stopRpm, torque: D.t > 0 ? D.torque : 0, key: D.t > 0 ? 'off' : 'on', fuel: D.t === 0, text: D.stopped ? '停止' : D.t > 0 ? `${n0(D.w / RPM)} rpm（燃料なし）` : `${P.stopRpm} rpm で回転中` }),
     readout: () => (D.t > 0 ? `キー OFF から ${n2(D.t)} 秒: ${n0(D.w / RPM)} rpm` + (D.stopped ? '（停止）' : '') : `キーを OFF にする前: ${P.stopRpm} rpm`) + `、フライホイール J = ${P.flyJ} kg·m²`
   },
   {

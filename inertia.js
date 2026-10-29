@@ -73,27 +73,27 @@ function mark(group, radius, z) {
 
 // ホイール（リム、スポーク、ハブ）。tire を渡すとタイヤも付ける
 function wheel(group, rim, color, spokes, tire) {
-  add(group, annulus(rim, rim - 0.025, 0.2), color);
+  tagPart(add(group, annulus(rim, rim - 0.025, 0.2), color), 'wheel');
   for (let k = 0; k < spokes; k++) {
-    const s = add(group, new THREE.BoxGeometry(0.035, rim - 0.06, 0.025), color, 0, 0, 0.06);
+    const s = tagPart(add(group, new THREE.BoxGeometry(0.035, rim - 0.06, 0.025), color, 0, 0, 0.06), 'wheel');
     s.geometry.translate(0, (rim - 0.06) / 2 + 0.04, 0);
     s.rotation.z = k * Math.PI * 2 / spokes;
   }
-  add(group, cyl(0.07, 0.12), color, 0, 0, 0.03);
+  tagPart(add(group, cyl(0.07, 0.12), color, 0, 0, 0.03), 'wheel');
   if (tire) {
-    add(group, annulus(tire, rim, 0.21), COLOR.rubber, 0, 0, 0, { metalness: 0, roughness: 0.9 });
+    tagPart(add(group, annulus(tire, rim, 0.21), COLOR.rubber, 0, 0, 0, { metalness: 0, roughness: 0.9 }), 'tire');
     mark(group, tire, 0.11);
   } else mark(group, rim, 0.11);
 }
 // フライホイール。outer = true なら、重さを外周に集めた形（厚いリム）
 function flywheel(group, heavyRim) {
-  add(group, teeth(0.15, 60, 0.008, 0.02), COLOR.steel, 0, 0, -0.02);                      // スターター用のリングギヤ
+  tagPart(add(group, teeth(0.15, 60, 0.008, 0.02), COLOR.steel, 0, 0, -0.02), 'ringGear');                      // スターター用のリングギヤ
   if (heavyRim) {
-    add(group, annulus(0.15, 0.11, 0.06), COLOR.power);                                     // 重さを集めた外周（橙色）
-    add(group, cyl(0.11, 0.012), COLOR.steel);
+    tagPart(add(group, annulus(0.15, 0.11, 0.06), COLOR.power), 'flyRim');                                     // 重さを集めた外周（橙色）
+    tagPart(add(group, cyl(0.11, 0.012), COLOR.steel), 'flywheel');
   } else {
-    add(group, cyl(0.15, 0.008), COLOR.steel);
-    add(group, cyl(0.07, 0.08), COLOR.power);                                               // 重さを集めた中心（橙色）
+    tagPart(add(group, cyl(0.15, 0.008), COLOR.steel), 'flywheel');
+    tagPart(add(group, cyl(0.07, 0.08), COLOR.power), 'flyCenter');                                               // 重さを集めた中心（橙色）
   }
   mark(group, 0.15, 0.04);
 }
@@ -218,7 +218,7 @@ const LESSONS = [
     inputs: [['エンジンのトルク (N·m)', 'throttle', 10, 120, 5]],
     bodies: () => [{
       name: 'クランク + フライホイール', J: 0.15, torque: p.throttle, goal: REDLINE, x: -0.25, tagY: -0.25,
-      build: g => { flywheel(g, true); add(g, cyl(0.05, 0.3), COLOR.steel, 0, 0, 0.12); },
+      build: g => { flywheel(g, true); tagPart(add(g, cyl(0.05, 0.3), COLOR.steel, 0, 0, 0.12), 'crank'); },
       decor: g => tachometer(g),
       tags: [['タコメーター', 0.55, -0.3]],
       update: b => {
@@ -246,11 +246,11 @@ const LESSONS = [
       name: 'タイヤ + ホイール + ブレーキディスク', J: 1.0, torque: 40, goal: 1000,
       build: g => {
         wheel(g, 0.21, COLOR.alu, 5, 0.315);
-        const disc = add(g, annulus(0.17, 0.08, 0.025), COLOR.steel, 0, 0, -0.14);
+        const disc = tagPart(add(g, annulus(0.17, 0.08, 0.025), COLOR.steel, 0, 0, -0.14), 'brakeDisc');
         for (let k = 0; k < 12; k++) add(g, new THREE.BoxGeometry(0.008, 0.07, 0.03), COLOR.dark, 0.125 * Math.cos(k * Math.PI / 6), 0.125 * Math.sin(k * Math.PI / 6), -0.14).rotation.z = k * Math.PI / 6;
         g.userData.disc = disc;
       },
-      decor: g => add(g, new THREE.BoxGeometry(0.12, 0.08, 0.07), 0xc0392b, 0.15, 0.06, -0.14),   // キャリパー
+      decor: g => tagPart(add(g, new THREE.BoxGeometry(0.12, 0.08, 0.07), 0xc0392b, 0.15, 0.06, -0.14), 'caliper'),   // キャリパー
       tags: [['ブレーキディスク（奥）', -0.42, 0.05], ['キャリパー', 0.42, 0.2]], tagY: -0.42,
       update: (b, dt) => {
         if (b.braking) {
@@ -287,9 +287,9 @@ const LESSONS = [
       { name: 'エンジンがタイヤを直接回す', J: 1.0, goal: 1500, torque: 20, x: -0.75, tags: [['回す側から見た重さ', -0.42, 0.05]], build: g => { add(g, cyl(0.03, 0.4), COLOR.steel, 0, 0, 0.15); wheel(g, 0.21, COLOR.alu, 5, 0.315); },
         decor: g => meter(g, 1.0) },
       { name: `ギヤ比 ${p.ratio} を通して回す（小さい歯車の回転数）`, J: 1.0 / p.ratio ** 2, goal: 1500, torque: 20, x: 0.15, tags: [['小さい歯車', 0, 0.12], ['大きい歯車 + タイヤ', 0.06 * (1 + p.ratio), 0.4], ['回す側から見た重さ', -0.42, 0.05]],
-        build: g => { add(g, teeth(0.05, 12, 0.012, 0.04), COLOR.brass, 0, 0, 0.15); mark(g, 0.05, 0.18); },
+        build: g => { tagPart(add(g, teeth(0.05, 12, 0.012, 0.04), COLOR.brass, 0, 0, 0.15), 'gearSmall'); mark(g, 0.05, 0.18); },
         parts: [{ x: 0.06 * (1 + p.ratio), ratio: -1 / p.ratio, build: g => {
-          add(g, teeth(0.05 * p.ratio, 12 * p.ratio, 0.012, 0.04), COLOR.brass, 0, 0, 0.15);
+          tagPart(add(g, teeth(0.05 * p.ratio, 12 * p.ratio, 0.012, 0.04), COLOR.brass, 0, 0, 0.15), 'gearBig');
           g.scale.setScalar(1);
           const w = new THREE.Group(); w.position.z = -0.12; w.scale.setScalar(0.75); wheel(w, 0.21, COLOR.alu, 5, 0.315); g.add(w);
         } }],
@@ -357,7 +357,7 @@ const tireJ = r => 0.15 + 9 * (0.9 * r) ** 2;
 // ---------- 段階ごとの飾りと仕掛け ----------
 // タコメーター（針は update で動かす）
 function tachometer(g) {
-  const face = new THREE.Group();
+  const face = tagPart(new THREE.Group(), 'tacho');
   face.position.set(0.55, 0.05, 0);
   g.add(face);
   add(face, cyl(0.22, 0.02), 0x111417);
@@ -375,7 +375,7 @@ function tachometer(g) {
 // 回す側から見た「重さ」の棒（左側。高さ = J。1 kg·m² で 0.4 m）
 function meter(g, J) {
   const h = Math.max(0.01, 0.4 * J);
-  add(g, new THREE.BoxGeometry(0.08, h, 0.08), COLOR.power, -0.42, -0.3 + h / 2, 0);
+  tagPart(add(g, new THREE.BoxGeometry(0.08, h, 0.08), COLOR.power, -0.42, -0.3 + h / 2, 0), 'meter');
   add(g, new THREE.BoxGeometry(0.1, 0.4, 0.002), 0x55656e, -0.42, -0.1, -0.05, { transparent: true, opacity: 0.4 });   // 1 kg·m² の目盛り
 }
 
@@ -395,13 +395,13 @@ function carRig() {
     // エンジンから見た走行抵抗のトルク = 走行抵抗 × タイヤの半径 / (変速比 × 最終減速比)
     load: b => roadForce(b.omega / ratioOf(b) * CAR.tire) * CAR.tire / ratioOf(b),
     decor: g => {
-      const body = add(g, new THREE.BoxGeometry(3.2, 0.55, 0.9), COLOR.body, 0.6, 0.15, 0, { transparent: true, opacity: 0.18, depthWrite: false });
+      const body = tagPart(add(g, new THREE.BoxGeometry(3.2, 0.55, 0.9), COLOR.body, 0.6, 0.15, 0, { transparent: true, opacity: 0.18, depthWrite: false }), 'body');
       body.material.side = THREE.DoubleSide;
       add(g, new THREE.BoxGeometry(1.2, 0.35, 0.85), COLOR.body, 0.7, 0.55, 0, { transparent: true, opacity: 0.18, depthWrite: false });
-      add(g, new THREE.BoxGeometry(0.35, 0.3, 0.3), COLOR.dark, -0.3, 0.05, 0);   // エンジン
-      add(g, new THREE.BoxGeometry(0.6, 0.16, 0.16), COLOR.steel, 0.35, 0.02, 0); // トランスミッション
-      add(g, cyl(0.025, 1.6).rotateY(Math.PI / 2), COLOR.steel, 1.0, -0.12, 0);   // プロペラシャフト
-      const ground = new THREE.Group();
+      tagPart(add(g, new THREE.BoxGeometry(0.35, 0.3, 0.3), COLOR.dark, -0.3, 0.05, 0), 'engineBox');   // エンジン
+      tagPart(add(g, new THREE.BoxGeometry(0.6, 0.16, 0.16), COLOR.steel, 0.35, 0.02, 0), 'transmission'); // トランスミッション
+      tagPart(add(g, cyl(0.025, 1.6).rotateY(Math.PI / 2), COLOR.steel, 1.0, -0.12, 0), 'propShaft');   // プロペラシャフト
+      const ground = tagPart(new THREE.Group(), 'road');
       ground.position.y = -0.52;
       for (let k = -6; k <= 6; k++) add(ground, new THREE.BoxGeometry(0.25, 0.01, 1.4), k % 2 ? 0x2b3e47 : 0x3d5560, 0.6 + k * 0.5, 0, 0);
       g.add(ground);
@@ -453,16 +453,16 @@ function syncRig() {
     name: 'ギヤ（空回り。回転を合わせる側）', J: p.syncJ, torque: p.syncT, goal: p.syncDiff, x: -0.25, axisX: true, tagY: -0.3,
     tags: [['コーン（金色）', SYNC.cone, -0.13], ['ドグ歯', SYNC.dog, 0.17], ['シンクロナイザリング', SYNC.ringFree, 0.16], ['ハブとスリーブ（軸と一緒に回る）', SYNC.hub + 0.05, 0.25], ['アウトプット軸', 0.58, -0.07]],
     build: g => {
-      add(g, teeth(0.2, 48, 0.012, 0.05), COLOR.alu);                                          // ギヤの歯（カウンタ軸のギヤとかみ合う）
-      add(g, teeth(0.11, 24, 0.01, 0.03), COLOR.steel, 0, 0, SYNC.dog);                       // ドグ歯
-      g.userData.cone = add(g, new THREE.CylinderGeometry(0.065, 0.085, 0.07, 48).rotateX(Math.PI / 2), COLOR.brass, 0, 0, SYNC.cone);   // コーン
+      tagPart(add(g, teeth(0.2, 48, 0.012, 0.05), COLOR.alu), 'syncGear');                                          // ギヤの歯（カウンタ軸のギヤとかみ合う）
+      tagPart(add(g, teeth(0.11, 24, 0.01, 0.03), COLOR.steel, 0, 0, SYNC.dog), 'dog');                       // ドグ歯
+      g.userData.cone = tagPart(add(g, new THREE.CylinderGeometry(0.065, 0.085, 0.07, 48).rotateX(Math.PI / 2), COLOR.brass, 0, 0, SYNC.cone), 'cone');   // コーン
       mark(g, 0.2, 0.03);
     },
     decor: g => {
-      g.userData.shaft = spinner(g, 0.15, s => add(s, cyl(0.03, 0.9), COLOR.steel));
-      g.userData.hub = spinner(g, SYNC.hub, s => { add(s, teeth(0.11, 24, 0.01, 0.06), COLOR.steel); mark(s, 0.11, 0.035); });
-      g.userData.ring = spinner(g, SYNC.ringFree, s => { add(s, annulus(0.105, 0.08, 0.03), COLOR.brass); });
-      g.userData.sleeve = spinner(g, SYNC.sleeveFree, s => { add(s, annulus(0.17, 0.125, 0.08), COLOR.dark, 0, 0, 0, { transparent: true, opacity: 0.85 }); mark(s, 0.17, 0.045); });
+      g.userData.shaft = tagPart(spinner(g, 0.15, s => add(s, cyl(0.03, 0.9), COLOR.steel)), 'outShaft');
+      g.userData.hub = tagPart(spinner(g, SYNC.hub, s => { add(s, teeth(0.11, 24, 0.01, 0.06), COLOR.steel); mark(s, 0.11, 0.035); }), 'hub');
+      g.userData.ring = tagPart(spinner(g, SYNC.ringFree, s => { add(s, annulus(0.105, 0.08, 0.03), COLOR.brass); }), 'syncRing');
+      g.userData.sleeve = tagPart(spinner(g, SYNC.sleeveFree, s => { add(s, annulus(0.17, 0.125, 0.08), COLOR.dark, 0, 0, 0, { transparent: true, opacity: 0.85 }); mark(s, 0.17, 0.045); }), 'sleeve');
     },
     update: (b, dt) => {
       const d = b.decor.userData;
@@ -500,6 +500,7 @@ sun.position.set(2, 3, 5);
 world.add(sun);
 const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 50);
 const controls = new THREE.OrbitControls(camera, canvas);
+enablePartInfo(canvas, () => camera, () => world);   // 部品をタッチすると名前と説明（partinfo.js）
 
 const state = { step: 1, tab: 'structure', pushing: false };
 let bodies = [];
@@ -522,7 +523,7 @@ function build() {
     const x = b.x !== undefined ? b.x : (k - (bodies.length - 1) / 2) * gap;
     const makeDecor = b.decor;
     Object.assign(b, { omega: 0, angle: 0, time: 0, heat: 0, finished: false });
-    b.group = newGroup(x);
+    b.group = tagPart(newGroup(x), { name: b.name, text: `回しにくさ（慣性モーメント）J = ${n3(b.J)} kg·m² の回る物です。` });
     b.build(b.group);
     if (b.axisX) b.group.rotation.y = Math.PI / 2;   // 回る軸を画面の左右に向ける（回転は z のまわり）
     b.decor = newGroup(x);            // 回らない部分（メーター、キャリパー、車体など）
@@ -540,6 +541,7 @@ function build() {
   if (why.open >= 0) { const row = LESSONS[state.step - 1].formula(bodies)[why.open]; setMark(row && row[3] ? row[3].mark || null : null); }
   frameCamera();
   el('banner').hidden = true;
+  showPart(null);   // 前の部品の説明を閉じる
 }
 
 function frameCamera() {

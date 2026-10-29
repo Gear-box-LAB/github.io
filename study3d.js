@@ -20,6 +20,7 @@ function init3d() {
   sun.position.set(5, 10, 7);
   scene.add(sun);
   view.three = { renderer, scene, camera, controls };
+  enablePartInfo(canvas, () => camera, () => view.world);   // 部品をタッチすると名前と説明（partinfo.js）
   new ResizeObserver(() => {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     camera.aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
@@ -88,11 +89,11 @@ function setLabel(sprite, text) {
 // 車（前は +x）。タイヤは回る
 function makeCar(color) {
   const car = new THREE.Group();
-  car.userData.body = box(car, 4.2, 0.6, 1.7, color, 0, 0.62, 0);
-  box(car, 2.2, 0.5, 1.5, 0x22313a, -0.2, 1.17, 0);
+  car.userData.body = tagPart(box(car, 4.2, 0.6, 1.7, color, 0, 0.62, 0), 'body');
+  tagPart(box(car, 2.2, 0.5, 1.5, 0x22313a, -0.2, 1.17, 0), 'cabin');
   car.userData.wheels = [];
   [-1.3, 1.3].forEach(x => [-0.8, 0.8].forEach(z => {
-    const wheel = new THREE.Group();
+    const wheel = tagPart(new THREE.Group(), 'tire');
     wheel.position.set(x, CAR.tire, z);
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(CAR.tire, CAR.tire, 0.22, 32).rotateX(Math.PI / 2), mat(0x1d1f22));
     wheel.add(tire);
@@ -104,7 +105,7 @@ function makeCar(color) {
 }
 // 道路（しま模様は stripes で、流して走っているように見せる）
 function makeRoad(width, length, from) {
-  const road = new THREE.Group();
+  const road = tagPart(new THREE.Group(), 'road');
   box(road, length, 0.02, width, 0x4a5258, from + length / 2, -0.01, 0);
   road.userData.stripes = new THREE.Group();
   for (let x = from; x < from + length; x += 6) box(road.userData.stripes, 3, 0.03, 0.15, 0xdfe6e9, x, 0, 0);
@@ -121,7 +122,7 @@ function build3d() {
   view.scene = l.scene;
   view.items = [];
   scene.add(view.world);
-  const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
+  const cam = { car: [[2.5, 4.5, 11], [0.5, 1, 0]], engine: l.circuit ? [[0.45, 0.55, 1.55], [0.03, 0.02, 0.12]] : [[0.75, 0.5, 1.0], [0.1, 0.06, 0]], race: [[-12, 6, 17], [-2, 0, 0]], carEngine: [[2.8, 3.6, 8.5], [0.6, 0.9, 0]] }[l.scene];
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
   // 縦長の画面（スマホ）では、札が左右で見切れないように、カメラを少し引く
@@ -132,11 +133,12 @@ function build3d() {
   ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
   controls.update();
   el('hint3d').textContent = {
-    car: `車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
-    engine: `ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。`,
-    carEngine: `車体を透かして、エンジンを3倍の大きさで見せています。エンジンの回転は 1/50、タイヤと道路は 1/${SLOW} の速さです。ドラッグで向きを変えられます。`,
-    race: '札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
+    car: `部品をタッチすると、名前と説明が出ます。車の重さを変えると、車の大きさも変わります。ドラッグで向きを変えられます。動きは 1/${SLOW} の速さです。矢印の長さは、小さな力も見えるように、力の平方根に比例させています。`,
+    engine: `部品をタッチすると、名前と説明が出ます。ドラッグで向きを変えられます。回転は 1/${l.slow3d || 50} の速さです。橙の矢印の長さがトルクの大きさです。`,
+    carEngine: `部品をタッチすると、名前と説明が出ます。車体を透かして、エンジンを3倍の大きさで見せています。エンジンの回転は 1/50、タイヤと道路は 1/${SLOW} の速さです。ドラッグで向きを変えられます。`,
+    race: '部品をタッチすると、名前と説明が出ます。札は変速する回転数（rpm）です。カメラは先頭の車について行きます。白い線は 100 m ごと、札は 500 m ごとです。ドラッグで向きを変えられます。'
   }[l.scene];
+  showPart(null);   // 前の部品の説明を閉じる
   buildMark();
 }
 
@@ -150,7 +152,7 @@ function buildCar() {
   const car = makeCar(0x9fb8c8);
   tilt.add(road, car);
   const arrows = lesson().arrows().map(([name, , color, spot]) => {
-    const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, color, 0.3, 0.22);
+    const arrow = tagPart(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, color, 0.3, 0.22), 'arrow:' + name.split('（')[0]);
     const tag = label(name, '#' + new THREE.Color(color).getHexString());
     sizeLabel(tag, 0.3);
     tilt.add(arrow, tag);
@@ -188,40 +190,43 @@ function makeEngine(parent, starter) {
   parent.add(g);
   const crank = new THREE.Group();
   g.add(crank);
-  rod(crank, 0.018, 0.42, 0x8e979c, 0.02, 0, 0);
+  tagPart(rod(crank, 0.018, 0.42, 0x8e979c, 0.02, 0, 0), 'crank');
   const phase = [0, Math.PI, Math.PI, 0];
   const pins = phase.map((p, k) => {
     const x = (k - 1.5) * BORE;
-    rod(crank, 0.016, 0.03, 0xc9a24a, x, CRANK_R * Math.cos(p), CRANK_R * Math.sin(p));
-    box(crank, 0.012, CRANK_R * 2 + 0.03, 0.05, 0x6a737a, x - 0.022, 0, 0).rotation.x = p;
+    tagPart(rod(crank, 0.016, 0.03, 0xc9a24a, x, CRANK_R * Math.cos(p), CRANK_R * Math.sin(p)), 'crankPin');
+    tagPart(box(crank, 0.012, CRANK_R * 2 + 0.03, 0.05, 0x6a737a, x - 0.022, 0, 0), 'crankArm').rotation.x = p;
     return { x, p };
   });
   const fly = new THREE.Group();
   fly.position.x = 0.25;
+  tagPart(fly, 'flywheel');
   rod(fly, 0.14, 0.025, 0x8e979c, 0, 0, 0);
   box(fly, 0.03, 0.03, 0.03, 0xd40000, 0, 0.12, 0);
   crank.add(fly);
   const pistons = pins.map(pin => ({
     pin,
-    piston: (() => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 32), mat(0xd7dde0)); g.add(m); return m; })(),
-    link: box(g, 0.014, ROD_L, 0.014, 0xb0b8bd, pin.x, 0, 0)
+    piston: (() => { const m = tagPart(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 32), mat(0xd7dde0)), 'piston'); g.add(m); return m; })(),
+    link: tagPart(box(g, 0.014, ROD_L, 0.014, 0xb0b8bd, pin.x, 0, 0), 'conrod')
   }));
-  box(g, BORE * 4 + 0.02, 0.16, 0.11, 0x9fb8c8, 0, ROD_L + 0.03, 0, { transparent: true, opacity: 0.18, depthWrite: false });
+  tagPart(box(g, BORE * 4 + 0.02, 0.16, 0.11, 0x9fb8c8, 0, ROD_L + 0.03, 0, { transparent: true, opacity: 0.18, depthWrite: false }), 'block');
   const eng = { g, crank, fly, pistons, angle: 0 };
   if (starter) {
     // リングギヤ: フライホイールの外周の歯
+    const ring = tagPart(new THREE.Group(), 'ringGear');
+    fly.add(ring);
     for (let k = 0; k < 72; k++) {
       const a = k / 72 * Math.PI * 2;
-      box(fly, 0.022, 0.012, 0.008, 0x6a737a, 0, 0.146 * Math.cos(a), 0.146 * Math.sin(a)).rotation.x = -a;
+      box(ring, 0.022, 0.012, 0.008, 0x6a737a, 0, 0.146 * Math.cos(a), 0.146 * Math.sin(a)).rotation.x = -a;
     }
     // スターターモーター（本体、上にマグネットスイッチ）と、出入りするピニオン
     const motor = new THREE.Group();
     motor.position.set(0, -0.172, 0);
     g.add(motor);
-    rod(motor, 0.04, 0.16, 0x3c454b, 0.37, 0, 0);
-    rod(motor, 0.022, 0.12, 0xb0b8bd, 0.37, 0.055, 0);
-    const shaft = rod(motor, 0.007, 0.1, 0x8e979c, 0.29, 0, 0);
-    const pinion = new THREE.Group();
+    tagPart(rod(motor, 0.04, 0.16, 0x3c454b, 0.37, 0, 0), 'starterMotor');
+    tagPart(rod(motor, 0.022, 0.12, 0xb0b8bd, 0.37, 0.055, 0), 'solenoid');
+    const shaft = tagPart(rod(motor, 0.007, 0.1, 0x8e979c, 0.29, 0, 0), 'pinion');
+    const pinion = tagPart(new THREE.Group(), 'pinion');
     motor.add(pinion);
     rod(pinion, 0.02, 0.022, 0xc9a24a, 0, 0, 0);
     for (let k = 0; k < 9; k++) {
@@ -252,10 +257,57 @@ function spinEngine(eng, rpm, slow, dt, starter) {
   }
 }
 
+// 配線: 点を通る細い管。glow で光らせる（電気が流れているとき）
+function wire(parent, points, color, r, key) {
+  const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+  const m = tagPart(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, r, 6), mat(color, { emissive: 0x000000 })), key);
+  parent.add(m);
+  return m;
+}
+// 始動の電気の流れ: キー → スターターリレー → マグネットスイッチ、バッテリー → スターター、ECU → インジェクターと点火コイル
+function makeCircuit(parent) {
+  const g = new THREE.Group();
+  parent.add(g);
+  const key = tagPart(new THREE.Group(), 'key');   // キーシリンダーとキー（回る）
+  key.position.set(-0.45, 0.12, 0.25);
+  key.scale.setScalar(1.8);   // 見やすいように大きめ
+  g.add(key);
+  tagPart(rod(g, 0.055, 0.03, 0x3c454b, -0.45, 0.12, 0.23).rotateY(Math.PI / 2), 'key');
+  box(key, 0.012, 0.045, 0.006, 0xc9a24a, 0, 0, 0.03);       // キーの差し込む所
+  box(key, 0.04, 0.03, 0.006, 0xb0b8bd, 0, 0.035, 0.03);     // キーの持つ所
+  const textMark = [['OFF', 0], ['ON', -0.9], ['ST', -1.4]];
+  textMark.forEach(([s, a]) => { const tg = label(s, '#dfe6e9'); sizeLabel(tg, 0.028); tg.position.set(-0.45 + 0.085 * Math.sin(-a), 0.12 + 0.085 * Math.cos(a), 0.26); g.add(tg); });
+  tagPart(box(g, 0.14, 0.1, 0.09, 0x2b2f33, 0.52, -0.06, 0.25), 'battery');
+  tagPart(rod(g, 0.01, 0.02, 0xd40000, 0.48, -0.0, 0.25).rotateZ(Math.PI / 2), 'battery');   // + 端子
+  tagPart(box(g, 0.035, 0.035, 0.035, 0x55656e, -0.2, -0.27, 0.22), 'relay');
+  tagPart(box(g, 0.1, 0.03, 0.07, 0xb0b8bd, -0.45, -0.12, 0.25), 'ecu');
+  for (let k = 0; k < 4; k++) {
+    const x = (k - 1.5) * BORE;
+    tagPart(box(g, 0.022, 0.05, 0.022, 0x2b2f33, x, 0.29, 0), 'coil');
+    tagPart(rod(g, 0.008, 0.04, 0x8e979c, x, 0.24, 0.07).rotateZ(Math.PI / 2), 'injector');
+  }
+  const wires = {
+    start: [wire(g, [[0.48, 0.0, 0.25], [0.1, 0.33, 0.35], [-0.45, 0.12, 0.22]], 0xe57373, 0.004, 'wireStart'),          // バッテリー → キー
+            wire(g, [[-0.45, 0.1, 0.22], [-0.35, -0.2, 0.25], [-0.2, -0.27, 0.22]], 0xe57373, 0.004, 'wireStart'),         // キー → リレー
+            wire(g, [[-0.2, -0.27, 0.22], [0.1, -0.3, 0.12], [0.37, -0.12, 0.02]], 0xe57373, 0.004, 'wireStart')],         // リレー → マグネットスイッチ
+    main: [wire(g, [[0.52, -0.06, 0.2], [0.55, -0.25, 0.12], [0.45, -0.18, 0.03]], 0xd40000, 0.009, 'wireMain')],          // バッテリー → スターター
+    ecu: [wire(g, [[-0.45, -0.12, 0.22], [-0.35, 0.33, 0.1], [-0.15, 0.33, 0.04], [0.15, 0.33, 0.04]], 0x7fc8f8, 0.004, 'wireEcu')]   // ECU → 点火コイル、インジェクター
+  };
+  // 部品の名前の札（つながりがわかるように）
+  [['キー', -0.45, 0.24, 0.25], ['バッテリー', 0.52, 0.04, 0.25], ['スターターリレー', -0.2, -0.33, 0.22], ['ECU', -0.45, -0.18, 0.25], ['スターター', 0.4, -0.27, 0.03]].forEach(([s, x, y, z]) => {
+    const tg = label(s, '#ffd54f');
+    sizeLabel(tg, 0.035);
+    tg.position.set(x, y, z);
+    g.add(tg);
+  });
+  return { key, wires };
+}
+
 function buildEngine() {
   const l = lesson();
   const eng = makeEngine(view.world, l.starter);
-  const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.27, 0.15, 0), 0.1, 0xf0a81c, 0.04, 0.035);
+  if (l.circuit) eng.circuit = makeCircuit(view.world);
+  const arrow = tagPart(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0.27, 0.15, 0), 0.1, 0xf0a81c, 0.04, 0.035), 'arrow:トルク');
   const tag = label('');
   sizeLabel(tag, 0.05);
   tag.position.set(0.05, 0.32, 0);
@@ -265,6 +317,16 @@ function buildEngine() {
 function updateEngine(dt) {
   const it = view.items, e = lesson().engine3d();
   spinEngine(it.eng, e.rpm, lesson().slow3d || 50, dt, e.starter);
+  const c = it.eng.circuit;
+  if (c) {
+    // キーの位置（OFF → ON → START）。電気が流れている配線を光らせる
+    c.key.rotation.z += ({ off: 0, on: -0.9, start: -1.4 }[e.key] - c.key.rotation.z) * Math.min(1, dt * 10);
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 80);
+    const glow = (list, on, color) => list.forEach(w => w.material.emissive.setHex(on ? color : 0).multiplyScalar(on ? 0.4 + 0.6 * pulse : 1));
+    glow(c.wires.start, e.key === 'start', 0xffd54f);
+    glow(c.wires.main, e.starter, 0xffa000);
+    glow(c.wires.ecu, e.fuel, 0x7fc8f8);
+  }
   it.arrow.visible = Math.abs(e.torque) > 0.5;
   it.arrow.setDirection(new THREE.Vector3(0, 0, Math.sign(e.torque) || 1));   // トルクの向き（− は回転を止める向き）
   it.arrow.setLength(Math.max(0.05, Math.abs(e.torque) / 200 * 0.3), 0.04, 0.035);
@@ -309,6 +371,7 @@ function buildRace() {
   }
   const cars = racers.map((r, k) => {
     const car = makeCar(new THREE.Color(r.color).getHex());
+    tagPart(car.userData.body, { name: r.name, text: '同じ車、同じエンジンで、変速する回転数だけが違います。' });
     car.position.z = (k - (racers.length - 1) / 2) * 3.2;
     const tag = label(r.short, r.color);
     sizeLabel(tag, 0.5);
@@ -375,8 +438,8 @@ function buildMark() {
   sizeLabel(tag, big ? 0.45 : 0.052);
   group.add(tag);
   // 重力 m × g（真下）と、そのうち路面を押す分 m × g × cos θ（路面に垂直）
-  const gravity = m.gravity && big ? [0xffffff, 0xffd54f].map(color => {
-    const a = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 1, color, 0.3, 0.22);
+  const gravity = m.gravity && big ? [0xffffff, 0xffd54f].map((color, j) => {
+    const a = tagPart(new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 1, color, 0.3, 0.22), j ? 'arrow:路面を押す力' : 'arrow:重力');
     const t = label('', '#' + new THREE.Color(color).getHexString());
     sizeLabel(t, 0.4);
     group.add(a, t);
@@ -429,7 +492,7 @@ function setView(want) {
   el('show3d').title = l.scene ? '' : 'ここは図だけです';
   el('showChart').classList.toggle('current', view.mode === 'chart');
   el('show3d').classList.toggle('current', view.mode === '3d');
-  if (view.mode === '3d') { if (!view.three) init3d(); build3d(); }
+  if (view.mode === '3d') { if (!view.three) init3d(); build3d(); } else showPart(null);
 }
 
 // 毎フレーム（study.js のループから呼ぶ）
