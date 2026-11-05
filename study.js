@@ -76,7 +76,7 @@ function drawChart(spec) {
   g.textAlign = 'center'; g.textBaseline = 'top';
   for (let v = 0; v <= spec.xMax + 1e-9; v += spec.xStep) {
     g.beginPath(); g.moveTo(x(v), pad.top); g.lineTo(x(v), h - pad.bottom); g.stroke();
-    g.fillText(v, x(v), h - pad.bottom + 6);
+    g.fillText(Number(v.toFixed(2)), x(v), h - pad.bottom + 6);
   }
   g.fillStyle = '#dfe6e9';
   g.fillText(spec.xLabel, (pad.left + w - pad.right) / 2, h - 18);
@@ -186,6 +186,7 @@ function showStep(step) {
   why.open = -1;
   view.markSpec = null;   // Step を変えたら、考え方と印を閉じる
   const l = lesson();
+  if (l.reset) l.reset();   // 項目のはじめの値にしてから、スライダーをつくる
   el('steps').innerHTML = LESSONS.map((x, i) =>
     `<button type="button" data-step="${i + 1}" class="${i + 1 === state.step ? 'current' : ''}">${i + 1}. ${x.name}</button>`).join('');
   el('controls').innerHTML = (l.actions || []).map((a, k) => `<button type="button" data-action="${k}">${a[0]}</button>`).join('')
@@ -193,7 +194,6 @@ function showStep(step) {
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
   el('run').textContent = l.runLabel || '';
-  if (l.reset) l.reset();
   setView(view.want);
   renderLesson();
 }
