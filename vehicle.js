@@ -1,8 +1,8 @@
 // vehicle.js: CAR STUDY LAB「車両運動性能」
-// 1. 発進性能 2. 加速性能 3. 登坂性能 4. 減速性能 5. Jerk 6. 前後の乗り心地（しゃくり） 7. 上下の乗り心地 8. 原因の切り分け
+// 1. 発進性能 2. 加速性能 3. 登坂性能 4. 減速性能 5. Jerk 6. 上下の乗り心地 7. 原因の切り分け
 // 計算は dyn.js（ドライブラインの 2 慣性 + ばね）、3D は study3d.js（車と力の矢印）と vdyn3d.js
 
-const P = { mass: 1000, grade: 0, pedal: 40, ctime: 1.2, speed: 0, gear: 1, rise: 0.05, k: 12000, c: 80, slope: 0, ks: 20, cs: 1.5, kmh: 30 };
+const P = { mass: 1000, grade: 0, pedal: 40, ctime: 1.2, speed: 0, gear: 1, rise: 0.05, k: 12000, slope: 0, ks: 20, cs: 1.5, kmh: 30 };
 const pct = v => `${v}%`, sec = v => `${n2(Number(v))} 秒`, gearText = g => GEARS[g][0];
 const C = { drive: 0xf0a81c, roll: 0x8fd694, air: 0x7fc8f8, grade: 0xe57373, net: 0xffffff, brake: 0xb39ddb };
 
@@ -32,7 +32,7 @@ const nowOr = (series, fallback) => (playing() ? valueAt(series, PLAY.t) : fallb
 
 // 各項目の条件
 const launchOpt = () => ({ g: 0, mass: P.mass, grade: P.grade, pedal: P.pedal / 100, rise: 0.1, clutch: true, clutchTime: P.ctime, time: 4 });
-const tipOpt = () => ({ g: P.gear - 1, mass: P.mass, pedal: P.pedal / 100, rise: P.rise, k: P.k, c: P.c, v0: speedAt(P.gear - 1, 2000), T0: 20, time: 2 });
+const tipOpt = () => ({ g: P.gear - 1, mass: P.mass, pedal: P.pedal / 100, rise: P.rise, k: P.k, c: DL.c, v0: speedAt(P.gear - 1, 2000), T0: 20, time: 2 });
 // 原因の切り分け: クラッチの摩擦係数の傾きがマイナスのときは、ジャダーが見えるように、ドライブラインの減衰を小さめにする
 const diagOpt = () => ({ g: 0, mass: P.mass, grade: P.grade, pedal: 0.6, rise: P.rise, k: P.k, c: DL.c, cSlip: P.slope < 0 ? 10 : DL.c, slope: P.slope, clutch: true, clutchTime: 1.2, time: 4 });
 const BASE = { g: 0, mass: 1000, grade: 0, pedal: 0.6, rise: 0.15, k: 12000, c: DL.c, slope: 0, clutch: true, clutchTime: 1.2, time: 4 };
@@ -86,11 +86,11 @@ const WHY = {
   clutchT: { text: '発進のときは、クラッチをすべらせながら（半クラッチ）力を伝えます。伝えるトルクは、押し付ける力と摩擦係数で決まり、運転する人やコンピューターが少しずつ強くします。つながる（すべりが 0 になる）瞬間に、トルクの変わり方が急だと、ゆれ（しゃくり）が出ます。' },
   accel: { text: '駆動力から走行抵抗を引いた残りを、重さで割ったものが加速度です。重さには、回る部品（エンジン、変速機、タイヤ）も一緒に速くする分 δ を足します。1 G は重力と同じ強さ（9.81 m/s²）です。',
     mark: { glow: ['top', 'body'], text: '余裕駆動力 ÷ 見かけの重さ' } },
+  delta: { text: '車が速くなるときは、車体だけでなく、エンジンやタイヤの回転も速くしないといけません。回転を速くするのに使うエネルギー 1/2 × J × ω² を、車が進むエネルギー 1/2 × m × v² の形に直すと、J × (i × i<sub>f</sub>)² ÷ r² の重さが車に加わったのと同じになります。エンジンは車速の (i × i<sub>f</sub>) ÷ r 倍で回るので、2乗で効きます。δ は、それを車の重さ m で割った割合です。',
+    mark: { glow: ['wheels'], text: '回る部品も一緒に速くする' } },
   gv: { text: 'G-V 線図は、横軸に車速、縦軸にその車速でのアクセル全開の加速度をとり、段ごとに線を描いた図です。どの段で、どれくらい力強く加速できるかが1枚でわかり、メーカーで加速性能を話すときの基本の図です。線の上の端をつないだ形（包絡線）がなめらかなほど、変速しても加速がとぎれません。',
     mark: { glow: ['rear'], text: '各段のアクセル全開の加速度' } },
   times: { text: '加速度を時間で足し合わせる（積分する）と、車速になります。0 → 100 km/h（発進加速）と、60 → 100 km/h（追い越し加速）は、加速性能のよく使う目安です。ここでは、いつも一番加速する段を使い、変速の時間は入れていません。' },
-  climb: { text: '一番低い段の最大の駆動力から、転がり抵抗を引いた残りで、坂を後ろへ引っぱる力 m × g × sin θ にちょうど勝てる角度が、登坂能力です。勾配 % = tan θ × 100 に直します。',
-    mark: { glow: ['rear', 'roof'], gravity: true, text: '駆動力の残り = m × g × sinθ' } },
   hold: { text: '坂で止まっているには、重力の坂に沿う分 m × g × sin θ と同じ力が要ります。タイヤの軸のトルクに直して、ギヤ比で割ると、エンジン（クラッチ）が出すべきトルクになります。半クラッチでこれより小さいトルクしか伝えていない間は、車は後ろに下がります。',
     mark: { glow: ['roof'], gravity: true, text: '坂に沿う重力に勝つトルク' } },
   rollback: { text: '後ろに下がった距離は、車速がマイナスの間の「速さ × 時間」を足したものです。実際の車は、ブレーキを少しの間保つ仕組み（ヒルスタートアシスト）で、これを防いでいます。' },
@@ -102,7 +102,6 @@ const WHY = {
   rise: { text: 'アクセルを踏んでも、エンジンのトルクはすぐには上がりません。空気が入るのに時間がかかり、さらに ECU が、わざとゆっくり上げます（トルクのなまし）。立ち上がりの時間を長くすると Jerk としゃくりは小さくなりますが、反応が遅い（もたつく）と感じます。ちょうどよい所を決めるのが、ドライバビリティの調整です。' },
   shuffle: { text: 'エンジン側（重さ J1）と車（J2）が、ねじれるドライブシャフト（ばね k）でつながっています。2つの物がばねでつながると、ばねの硬さと重さで決まる速さで、行ったり来たりゆれます（固有振動数）。低い段ほど、エンジン側がギヤ比の2乗だけ重く見えるので、振動数が低くなります（1速で 3 Hz くらい）。',
     mark: { glow: ['body', 'driver'], text: 'エンジン側と車が、ドライブシャフトのばねでゆれる' } },
-  damping: { text: 'ゆれは、摩擦や油の抵抗（減衰）で少しずつ小さくなります。減衰が小さいほど、何回もゆれ続けます。減衰比 ζ は、ちょうどゆれなくなる減衰（臨界減衰 2√(k × J)）との比で、ドライブラインは 0.05〜0.1 くらいと小さいので、ゆれが残りやすいのです。' },
   bodyHz: { text: '車体（ばね上）は、ばねとタイヤのばねを直列につないだばねに乗っています。このばねと車体の重さで決まる振動数が、ふわふわとゆれる速さです（1〜1.5 Hz）。人が歩くときの上下の速さに近く、心地よいとされています。',
     mark: { glow: ['body', 'spring'], text: '車体 + ばね → 1〜1.5 Hz' } },
   wheelHz: { text: 'タイヤとホイール（ばね下）は軽く、硬いタイヤのばねに乗っているので、速く（10〜15 Hz）ゆれます。路面の小さな凸凹を、車体に伝える前に吸収する役目です。',
@@ -132,7 +131,7 @@ const LESSONS_VEHICLE = [
       '<b>見る所</b>: 「発進する」を押すと、グラフの加速度の線と、3D の力の矢印が動きます。クラッチがつながる瞬間に、加速度が小さくゆれるのが「しゃくり」です。重さ、坂道、アクセル、クラッチをつなぐ時間を変えて、発進の速さとゆれを比べてください。',
       'ここでは、半クラッチの間、運転する人がエンジンを 1,500 rpm に保ち、エンジンのトルクに合わせてクラッチをつなぐとしています。'
     ],
-    symbols: 'F: 駆動力、R: 走行抵抗、m: 車の重さ、g: 9.81 m/s²、θ: 坂の角度、a: 加速度、δ: 回る部品の分。',
+    symbols: 'F: 駆動力、R: 走行抵抗、m: 車の重さ、g: 9.81 m/s²、θ: 坂の角度、a: 加速度、δ: 回る部品（エンジン、変速機、タイヤ）を一緒に速くする分の重さの割合、J<sub>e</sub>: エンジン側の慣性モーメント、J<sub>w</sub>: タイヤ4本の慣性モーメント。',
     formula: () => {
       const s = sim(launchOpt()), t20 = reach(s, 20), amax = Math.max(...s.points.map(p => p[1]));
       return [
@@ -161,6 +160,7 @@ const LESSONS_VEHICLE = [
     symbols: 'a: 加速度 (G)、F: 駆動力、R: 走行抵抗、m: 車の重さ、δ: 回る部品の分。',
     formula: () => { const r = accelTimes(P.mass); return [
       ['G-V 線図の線', 'a(v) = (F(v) − R(v)) / (m × (1 + δ)) ÷ g', `時速 ${P.speed} km: ` + GEARS.map((x, g) => (usable(g, P.speed) ? `${x[0]} ${n2(accelG(g, P.speed, P.mass))} G` : null)).filter(Boolean).join('、'), WHY.gv],
+      ['回る部品の分 δ', `δ = (${sub('J', 'e')} × (i × ${sub('i', 'f')})² + ${sub('J', 'w')}) / (m × r²)`, GEARS.map((x, g) => `${x[0]} ${n2(delta(g, P.mass))}`).join('、'), WHY.delta],
       ['0 → 100 km/h と 60 → 100 km/h', 't = ∫ dv / a(v)', `${n1(r.t100)} 秒、${n1(r.pass)} 秒（${P.mass} kg、変速の時間なし）`, WHY.times]
     ]; },
     chart: () => ({
@@ -176,7 +176,7 @@ const LESSONS_VEHICLE = [
     runLabel: '坂道で発進する', start: () => startPlay(4, 1.5), tick: dt => tickPlay(dt, sim(launchOpt())), reset: () => { PLAY.t = -1; P.speed = 0; P.grade = 10; P.pedal = 60; },
     arrows: () => arrowsWith(nowOr(sim(launchOpt()).force, 0), P.mass),
     text: [
-      '<b>登坂性能</b>には2つあります。① 一番低い段で、どれだけ急な坂を登れるか（登坂能力）。② 坂の途中で止まった所から、後ろに下がらずに発進できるか（坂道発進）。',
+      '<b>登坂性能</b>には2つあります。① 一番低い段で、どれだけ急な坂を登れるか（登坂能力。テーマ「駆動力線図と走行抵抗」の 4. で見られます）。② 坂の途中で止まった所から、後ろに下がらずに発進できるか（坂道発進）。ここでは ② を見ます。',
       '<b>構造</b>: 坂では、重力 m × g の一部 m × g × sin θ が、いつも車を後ろへ引っぱります。これに勝つトルクを、クラッチとギヤで作らないといけません。',
       '<b>見る所</b>: 「坂道で発進する」を押すと、グラフに車速の線が出ます。半クラッチで伝えるトルクが、坂の力より小さい間は、車速がマイナス（後ろに下がる）になります。勾配と重さを上げたり、クラッチを速くつないだりして比べてください（ブレーキは使わない計算です）。'
     ],
@@ -184,9 +184,7 @@ const LESSONS_VEHICLE = [
     formula: () => {
       const s = sim(launchOpt()), th = Math.atan(P.grade / 100);
       const back = s.speed.reduce((d, [, v], i) => d + (v < 0 ? -v / 3.6 * 0.01 : 0), 0);
-      const fMax = Math.max(...driveLine(0).map(([, f]) => f)), climb = Math.tan(Math.asin(Math.min(1, (fMax - CAR.roll * P.mass * G) / (P.mass * G)))) * 100;
       return [
-        ['1速の登坂能力', 'm × g × sin θ = F<sub>最大</sub> − 転がり抵抗', `${n0(climb)}%（${P.mass} kg）`, WHY.climb],
         ['坂で止まっているのに要るエンジンのトルク', `T = m × g × sin θ × r / (i × ${sub('i', 'f')} × η)`, `${P.grade}% で ${n1(P.mass * G * Math.sin(th) * CAR.tire / (total(0) * CAR.eff))} N·m`, WHY.hold],
         ['後ろに下がった距離', 'd = ∫ (車速 < 0) dt', back > 0.005 ? `約 ${n0(back * 100)} cm` : '下がらない', WHY.rollback]
       ];
@@ -238,26 +236,6 @@ const LESSONS_VEHICLE = [
     readout: () => { const s = sim(tipOpt()); return `${gearText(P.gear - 1)}、2,000 rpm からアクセル ${P.pedal}%: 一番大きい Jerk ${n1(Math.max(...s.jerk.map(p => Math.abs(p[1]))))} G/s、ゆれ ${n2(waveOf(s.points, 0.05).osc)} G`; }
   },
   {
-    name: '前後の乗り心地（しゃくり）', title: '前後の乗り心地: ドライブラインのねじれで起きる、前後のゆれ（しゃくり）',
-    scene: 'custom', cam: [[2.2, 1.6, 5.0], [0, 0.8, 0]], hint3d: '車体の傾きと、頭のゆれは、見やすいように大きくしています。',
-    controls: [['段', 'gear', 1, 6, 1, v => GEARS[v - 1][0]], ['ねじり剛性 k (N·m/rad)', 'k', 4000, 30000, 1000], ['減衰 c (N·m·s/rad)', 'c', 20, 400, 10]],
-    runLabel: 'アクセルを踏む', start: () => startPlay(2, 3), tick: dt => tickPlay(dt, sim(tipOpt())), reset: () => { PLAY.t = -1; P.gear = 1; P.rise = 0.02; P.pedal = 60; },
-    build3d: world => buildPitchCar(world),
-    update3d: (it, dt) => { const s = sim(tipOpt()); updatePitchCar(it, dt, nowOr(s.points, 0), nowOr(s.speed, speedAt(P.gear - 1, 2000)), `${n2(nowOr(s.points, 0))} G`); },
-    text: [
-      '<b>しゃくり</b>（英語で shuffle、surge）は、アクセルを踏んだり離したりした後に、車が前後に「ガクガク」と数回ゆれる現象です。お客様の「ギクシャクする」の代表的な原因です。',
-      '<b>構造</b>: エンジン、クラッチ、変速機（エンジン側）と、車そのもの（車側）が、ドライブシャフトなどのねじれる部品（ばね）でつながっています。トルクが急に変わると、このばねがねじれて戻り、2つが行ったり来たりゆれます。',
-      '<b>見る所</b>: 段を変えると、ゆれの速さ（振動数）が変わります。1速で 3 Hz くらいと遅く、上の段ほど速く小さくなります。ねじり剛性 k を下げると振動数が下がり、減衰 c を上げると早くおさまります。詳しくは、テーマ「ドライブライン」の 4. で見られます。'
-    ],
-    symbols: `k: ねじり剛性、${sub('J', '1')}: エンジン側の慣性（タイヤの軸で見た値 J × (i × ${sub('i', 'f')})²）、${sub('J', '2')}: 車の慣性 m × r²、c: 減衰、ζ: 減衰比。`,
-    formula: () => { const g = P.gear - 1, j1 = J1(g, true), j2 = J2(P.mass), je = j1 * j2 / (j1 + j2); return [
-      ['しゃくりの振動数', `f = (1 / 2π) × √(k × (1 / ${sub('J', '1')} + 1 / ${sub('J', '2')}))`, `${gearText(g)}: ${sub('J', '1')} = ${n1(j1)}、${sub('J', '2')} = ${n0(j2)} kg·m² → ${n1(shuffleHz(g, P.k))} Hz`, WHY.shuffle],
-      ['減衰比', 'ζ = c / (2 × √(k × J))', `${n2(P.c / (2 * Math.sqrt(P.k * je)))}（小さいほど、ゆれが続く）`, WHY.damping]
-    ]; },
-    chart: () => { const s = sim(tipOpt()); return timeChart('加速度 (G)', -0.4, 0.8, 0.2, [{ name: `${gearText(P.gear - 1)}（${n1(shuffleHz(P.gear - 1, P.k))} Hz）`, color: '#f0a81c', points: s.points, width: 3 }], [], 2); },
-    readout: () => { const s = sim(tipOpt()), w = waveOf(s.points, 0.05); return `${gearText(P.gear - 1)}: しゃくり ${n1(shuffleHz(P.gear - 1, P.k))} Hz（計算のゆれ ${n1(w.hz)} Hz）、ゆれの大きさ ${n2(w.osc)} G`; }
-  },
-  {
     name: '上下の乗り心地', title: '上下の乗り心地（Ride comfort）: 段差を越えたときの、ばねとショックアブソーバー',
     scene: 'custom', cam: [[1.6, 1.4, 3.4], [0, 0.6, 0]], hint3d: '車の4分の1（1輪分）です。上下の動きは、見やすいように3倍に大きくしています。',
     controls: [['ばね (kN/m)', 'ks', 10, 40, 1], ['ショックアブソーバー (kN·s/m)', 'cs', 0.5, 4, 0.1], ['車速 (km/h)', 'kmh', 10, 60, 5]],
@@ -265,7 +243,7 @@ const LESSONS_VEHICLE = [
     build3d: world => buildQuarter(world),
     update3d: (it, dt) => { const q = quarter(); updateQuarter(it, dt, nowOr(q.zs, 0), nowOr(q.wheel, 0), nowOr(q.xb, 2), playing() ? P.kmh : 0); },
     text: [
-      '<b>乗り心地</b>（Ride comfort）は、路面の凸凹や段差から、乗っている人に伝わるゆれの小ささです。上下のゆれのほか、前後のゆれ（しゃくり、6.）も含みます。',
+      '<b>乗り心地</b>（Ride comfort）は、路面の凸凹や段差から、乗っている人に伝わるゆれの小ささです。上下のゆれのほか、前後のゆれ（しゃくり。テーマ「ドライブライン」の 4.）も含みます。',
       '<b>構造</b>: 車体（ばね上）は、ばねとショックアブソーバー（ダンパー）を通して、タイヤとホイール（ばね下）に乗り、タイヤもゴムのばねとして路面に乗っています。2つの重さと2つのばねの組み合わせです。',
       '<b>見る所</b>: 「段差を越える」を押すと、高さ 3 cm、長さ 1 m の山を越えます。グラフは車体の上下の加速度です。ばねを硬くするとゆれが速くなり、ショックアブソーバーを弱くするとゆれ続けます。強くしすぎると、段差の衝撃が大きくなります。'
     ],

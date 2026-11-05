@@ -46,7 +46,7 @@ function renderResults() {
   el('openResults').hidden = !onRace;
   el('openResults').disabled = !started;   // 走る前は、表に出すものがない
   el('results').hidden = !onRace || !race.open || !started;
-  if (view.mode === '3d') el('hint3d').hidden = !el('results').hidden;   // 表を出す間は、左上の説明を隠す（スマホで重ならないように）
+  if (has3d()) el('hint3d').hidden = !el('results').hidden;   // 表を出す間は、左上の説明を隠す（スマホで重ならないように）
   if (el('results').hidden) return;
   // 新しい地点を最初の車が通過したら、その地点の表に切り替える
   const latest = SPLITS.filter(d => racers.some(r => r.split[d] !== undefined)).pop() || 0;
@@ -233,7 +233,7 @@ const LESSONS_ENGINE = [
       'もっと短い距離（400 m など）では、7,000 rpm がわずかに勝つこともあります。変速の間（0.3 秒）は駆動力が 0 になるので、ゴールが近いと、引っぱって変速を遅らせた方が得になる場合があるからです。最適な点は、変速が一瞬で終わるときの目安です。',
       '変速には 0.3 秒かかり、その間は加速しない、発進は半クラッチでエンジンを 3,000 rpm に保つ、としています。どちらも説明用の値です。'
     ],
-    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（駆動力線図の 4. と同じ式）。',
+    symbols: 'a = (F<sub>d</sub> − R) / (m × (1 + δ))（テーマ「車両運動性能」の 2. と同じ式）。',
     formula: () => racers.map(r => [r.name, '500 m、1000 m、1500 m、2000 m のタイム', SPLITS.map(d => r.split[d] !== undefined ? `${n3(r.split[d])} 秒` : '−').join('、'), WHY.race])
       .concat([['最適な点の変速点', `${sub('F', 'n')}(v) = ${sub('F', 'n+1')}(v)`, [0, 1, 2, 3, 4].map(g => `${GEARS[g][0]}→${GEARS[g + 1][0]} ${n0(crossAt(g))} rpm`).join('、'), WHY.cross]]),
     chart: () => ({

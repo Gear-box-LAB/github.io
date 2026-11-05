@@ -39,6 +39,8 @@ h1 { font-size: 18px; white-space: nowrap; }
 /* グラフで学ぶページ: 図の場所いっぱいにグラフを出す */
 #chart, #scene3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #scene3d { cursor: grab; }
+/* 重ねる: 3D の上に図を透かして出す。図はさわれないようにして、3D を回せるようにする */
+#chart.overlay { pointer-events: none; background: rgba(20, 35, 43, 0.45); }
 /* 加速くらべの結果の表（3D の右上。車が見えるように小さく、透かす） */
 .results { position: absolute; top: 8px; right: 8px; padding: 6px 8px; background: rgba(20, 35, 43, 0.8); border-radius: 4px; color: #dfe6e9; font-size: 12px; }
 .results td { padding: 3px 6px; border-color: rgba(223, 230, 233, 0.2); }
@@ -103,6 +105,7 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .view3d { position: relative; flex: 1; min-height: 0; }
 #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
 .hint { position: absolute; top: 10px; left: var(--space); max-width: 40%; color: var(--hint); font-size: 13px; pointer-events: none; }
+#chart.overlay + .hint { top: 40px; left: 72px; padding: 6px 8px; background: rgba(20, 35, 43, 0.85); border-radius: 4px; }   /* 重ねるときは、図の目盛りの上に読める地をしく */
 /* 右上: 配色と、車に載せるかの切り替え */
 .view { position: absolute; top: 8px; right: var(--space); justify-content: flex-end; max-width: 48%; }
 .view button { font-size: 12px; padding: 3px 8px; }
@@ -179,7 +182,11 @@ input[type="number"] { width: 100%; min-width: 60px; }
   background: var(--panel);
   border-left: 1px solid var(--line);
   min-height: 0;
+  position: relative;
 }
+/* 説明の左のふち: ドラッグで幅を変える（resize.js） */
+.grip { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; z-index: 5; }
+.grip:hover, .grip.dragging { background: var(--pick); opacity: 0.5; }
 .body { flex: 1; overflow-y: auto; min-height: 0; }
 .pager { justify-content: space-between; }
 
@@ -217,12 +224,13 @@ select { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 @media (max-width: 800px) {
   body { height: auto; }
   .steps { flex-wrap: nowrap; overflow-x: auto; }
-  .bench { grid-template-columns: 1fr; }
   .stage { height: auto; }
   .view3d { flex: none; height: 55vh; }   /* 帯の高さに関係なく、図の高さを保つ */
   .bar { padding: 6px 8px; gap: 6px 10px; }
   .bar input { width: 64px; }
   .panel { border-left: 0; }
+  .bench { grid-template-columns: 1fr !important; }   /* ドラッグで決めた幅より、縦に並べるのを優先 */
+  .grip { display: none; }
   .graph { top: 150px; left: 8px; right: 8px; width: auto; height: calc(100% - 158px); min-height: 0; }   /* スマホは図に重なってもよい。下の操作の帯には重ねない */
   .bubble { left: 8px !important; top: 8px !important; width: auto; right: 8px; }
 }

@@ -229,7 +229,7 @@ const WHY = {
     mark: { glow: ['pistons'], text: '圧縮に押し戻される' } },
   neutral: { text: 'N では、クラッチの先に何もつながっていないので、エンジンが回すのは自分の回る部品だけ（J = 0.18 kg·m²）です。回る物の運動方程式 J × α = T から、J が小さいほど回転が速く上がります。アクセルを離すと、燃料が止まり、摩擦トルクで回転が下がります。',
     mark: { glow: ['pistons', 'flywheel'], text: 'エンジン側の J だけ → 速く上がる' } },
-  inGear: { text: '段に入ってクラッチがつながると、エンジンは車も一緒に動かします。車の重さは、エンジンから見ると J_v = m × r² ÷ (i × i<sub>f</sub>)² の回しにくさに見えます（テーマ「回転体のイナーシャ」の 7.）。低い段ほど i が大きく、車が軽く見えるので、回転が速く上がります。',
+  inGear: { text: '段に入ってクラッチがつながると、エンジンは車も一緒に動かします。車の重さは、エンジンから見ると J_v = m × r² ÷ (i × i<sub>f</sub>)² の回しにくさに見えます。低い段ほど i が大きく、車が軽く見えるので、回転が速く上がります。',
     mark: { glow: ['wheels', 'flywheel'], text: '車の重さもエンジンから見ると J' } },
   after: { text: 'クラッチがつながっていると、エンジンの回転数は車速と変速比で決まります（n = 車速 ÷ r × i × i<sub>f</sub>）。変速の一瞬、車速はほとんど変わらないので、つないだ後の回転数は「変速前 × 次の変速比 ÷ 今の変速比」に下がります。',
     mark: { glow: ['crank'], text: '車速そのまま → 回転は変速比に比例' } },
@@ -343,7 +343,7 @@ const LESSONS_RUN = [
   },
   {
     name: 'シフトとアクセル', title: 'N・R・1速〜6速で、アクセルとアップシフトのときのエンジンの動き',
-    scene: 'carEngine', live: true,
+    scene: 'carEngine', live: true, overlay: true,
     actions: [['自動で見る', startScript, () => !!R.script]]
       .concat(SHIFTS.map((x, g) => [x[0], () => { manual(); shiftTo(g); }, () => R.target === g]))
       .concat([['ブレーキ', () => { manual(); R.brake = true; R.msg = 'ブレーキで止めます。'; }, () => R.brake]]),

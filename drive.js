@@ -14,8 +14,6 @@ function topSpeed(grade, mass, cda) {
   });
   return best;
 }
-// 余裕駆動力から求める加速度 (m/s²)。回転部分も加速させるので、質量を (1 + δ) 倍にする
-const accelAt = (g, v, grade, mass, cda) => (driveAt(g, v) - resistTotal(v, grade, mass, cda)) / ((mass || CAR.mass) * (1 + delta(g, mass)));
 
 // 3D の矢印（色は図の線と同じ）
 const C = { drive: 0xf0a81c, roll: 0x8fd694, air: 0x7fc8f8, grade: 0xe57373, net: 0xffffff };
@@ -54,11 +52,6 @@ const WHY = {
     mark: { glow: ['rear', 'nose'], text: '駆動力 = 走行抵抗 で加速が止まる' } },
   gearTop: { text: '1つ目の式（回転数 = 車速 ÷ r × i × i<sub>f</sub>）を車速について解き、回転数にレッドゾーンの 7,000 rpm を入れます。変速比の小さい段ほど、同じ回転数で速く走れます。',
     mark: { glow: ['wheels'], text: '回転数の上限 → 車速の上限' } },
-  delta: { text: '車が速くなるときは、車体だけでなく、エンジンやタイヤの回転も速くしないといけません。回転を速くするのに使うエネルギー 1/2 × J × ω² を、車が進むエネルギー 1/2 × m × v² の形に直すと、J × (i × i<sub>f</sub>)² ÷ r² の重さが車に加わったのと同じになります。エンジンは車速の (i × i<sub>f</sub>) ÷ r 倍で回るので、2乗で効きます。δ は、それを車の重さ m で割った割合です。',
-    mark: { glow: ['wheels'], text: '回る部品も一緒に速くする' } },
-  accel: { text: '運動方程式 F = m × a を、加速度について解くと a = F ÷ m です。力 F には余裕駆動力を、重さ m には回る部品の分を足した m × (1 + δ) を入れます。',
-    mark: { glow: ['top', 'body'], text: '余裕駆動力 ÷ 見かけの重さ' } },
-  g: { text: '1 G は重力加速度 9.81 m/s² です。加速度を 9.81 で割ると、重力の何倍の強さかがわかります。0.3 G は、体重の 3 割の力で背中を押される感じです。' },
   climb: { text: '各段の最大の駆動力から、転がり抵抗と空気抵抗を引いた残りで、勾配抵抗 m × g × sin θ にちょうど勝てる θ を探します。sin θ = 残りの力 ÷ (m × g) から θ を出し、勾配 % = tan θ × 100 に直します。',
     mark: { glow: ['rear', 'roof'], gravity: true, text: '駆動力の残り = m × g × sinθ' } }
 };
@@ -159,30 +152,6 @@ const LESSONS_DRIVE = [
     scene: 'car',
     arrows: () => allArrows(0, CAR.mass),
     readout: () => `時速 ${P.speed} km の駆動力: ` + GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n0(driveAt(g, P.speed))} N` : `${x[0]} −`).join('、') + ` ／ 走行抵抗 ${n0(resistTotal(P.speed))} N`
-  },
-  {
-    name: '余裕駆動力と加速', title: '余裕駆動力 ÷ 重さ が加速度。回る部品の分だけ重く見える',
-    controls: [['車速 (km/h)', 'speed', 0, 240, 1], ['車の重さ (kg)', 'mass', 800, 2000, 50]],
-    text: [
-      '余裕駆動力（駆動力 − 走行抵抗）で車を加速させます。加速度は、余裕駆動力を重さで割った値です。',
-      'ただし、車が速くなるときは、エンジン、変速機、タイヤの回転も速くしないといけません。その分、車は実際より重く見えます。これを「回転部分相当質量」と言い、重さを (1 + δ) 倍にして計算します。',
-      'δ は、CAR STUDY の「イナーシャ」で見た「エンジンから見た車の重さ」の逆です。低い段ほどエンジンが速く回るので δ が大きくなります（1速では車が2割近く重く見えます）。',
-      'グラフは、各段の加速度 (G) です。1 G は重力と同じ強さ（約 9.8 m/s²）です。同じ車速なら、上の線の段を使うと速く加速できます。重さを変えて、加速がどう変わるか確かめてください。'
-    ],
-    symbols: 'a: 加速度、m: 車の重さ、δ: 回転部分の重さの割合、J<sub>e</sub>: エンジン側の慣性モーメント 0.18 kg·m²、J<sub>w</sub>: タイヤ4本の慣性モーメント 4 kg·m²。',
-    formula: () => [
-      ['回転部分の重さの割合', `δ = (${sub('J', 'e')} × (i × ${sub('i', 'f')})² + ${sub('J', 'w')}) / (m × r²)`, GEARS.map((x, g) => `${x[0]} ${n2(delta(g, P.mass))}`).join('、'), WHY.delta],
-      ['加速度', `a = (${sub('F', 'd')} − R) / (m × (1 + δ))`, GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n2(accelAt(g, P.speed, 0, P.mass) / G)} G` : null).filter(Boolean).join('、') || 'この車速を出せる段がない', WHY.accel],
-      ['G に直す', 'a ÷ 9.81', '0.3 G で、1秒に時速約 10.6 km 速くなる', WHY.g]
-    ],
-    chart: () => ({
-      xLabel: '車速 (km/h)', yLabel: '加速度 (G)', xMax: 240, xStep: 40, yMax: 0.8, yStep: 0.2,
-      series: GEARS.map((x, g) => ({ name: x[0], color: COLORS[g], points: driveLine(g).map(([v]) => [v, accelAt(g, v, 0, P.mass) / G]) })),
-      vline: P.speed
-    }),
-    scene: 'car',
-    arrows: () => allArrows(0, P.mass),
-    readout: () => `時速 ${P.speed} km、${P.mass} kg の加速度: ` + GEARS.map((x, g) => rpmAt(g, P.speed) <= REDLINE && rpmAt(g, P.speed) >= IDLE ? `${x[0]} ${n2(accelAt(g, P.speed, 0, P.mass) / G)} G` : `${x[0]} −`).join('、')
   },
   {
     name: '坂道', title: '坂道では走行抵抗の線が上がり、最高速が下がり、使える段が減る',

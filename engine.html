@@ -22,6 +22,7 @@
   <section class="stage">
     <div class="view3d">
       <canvas id="scene3d" hidden aria-label="3Dの図"></canvas>
+      <canvas id="chart" aria-label="エンジンの性能曲線と変速点のグラフ"></canvas>
       <p class="hint" id="hint3d" hidden></p>
       <div class="partInfo" id="partInfo" hidden></div>
       <div class="results" id="results" hidden>
@@ -29,12 +30,12 @@
         <div class="buttons splits" id="splitTabs"></div>
         <table><tbody id="resultsBody"></tbody></table>
       </div>
-      <canvas id="chart" aria-label="エンジンの性能曲線と変速点のグラフ"></canvas>
     </div>
     <div class="bar">
       <div class="buttons">
-        <button type="button" id="showChart">図</button>
-        <button type="button" id="show3d">3D</button>
+        <button type="button" id="showChart" data-mode="chart">図</button>
+        <button type="button" id="showBoth" data-mode="both">重ねる</button>
+        <button type="button" id="show3d" data-mode="3d">3D</button>
         <button type="button" id="run" hidden></button>
         <button type="button" id="openResults" hidden>結果の表</button>
       </div>
@@ -64,5 +65,6 @@
 <script src="study.js"></script>
 <script src="study3d.js"></script>
 <script src="engine.js"></script>
+<script src="resize.js"></script>
 </body>
 </html>

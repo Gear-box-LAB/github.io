@@ -465,7 +465,7 @@ LESSONS_TRANS.forEach(l => {
   l.build3d = world => (TR_CAR ? buildOnCar(world, l, build) : build(world));
   l.update3d = (it, dt) => { update(it, dt); if (it.onCar) updateOnCar(it, dt, c.out(), c.final || CAR.final); };
   l.cam = () => (TR_CAR ? CAR_CAM : cam);
-  l.actions = (l.actions || []).concat([['車に載せる', () => { TR_CAR = !TR_CAR; setView('3d'); }, () => TR_CAR]]);
+  l.actions = (l.actions || []).concat([['車に載せる', () => { TR_CAR = !TR_CAR; redo3d(); }, () => TR_CAR]]);
   l.text = l.text.concat([`<b>車への載せ方</b>（「車に載せる」で 3D に出ます）: ${c.carText}`]);
 });
 // CVT の比の帯: 一番低い比と一番高い比の線と、今の比の線

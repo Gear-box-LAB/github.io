@@ -45,7 +45,7 @@ function resist(v, grade, mass, cda) {
   return { roll: CAR.roll * m * G * Math.cos(a), air: 0.5 * CAR.air * (cda || CAR.cda) * ms * ms, grade: m * G * Math.sin(a) };
 }
 const resistTotal = (v, grade, mass, cda) => { const r = resist(v, grade, mass, cda); return r.roll + r.air + r.grade; };
-// 回転部分の重さを加える割合 δ: 回る物の J を、車の重さに直したもの（CAR STUDY イナーシャの段階7）
+// 回転部分の重さを加える割合 δ: 回る物の J を、車の重さに直したもの
 const delta = (g, mass) => (J_ENGINE * total(g) ** 2 + J_WHEELS) / ((mass || CAR.mass) * CAR.tire ** 2);
 
 // ---------- グラフ ----------
@@ -152,8 +152,8 @@ function startCourse(lessons, note) {
     if (lesson().start) state.running = true;
     draw();
   });
-  el('showChart').addEventListener('click', () => { setView('chart'); renderLesson(); });
-  el('show3d').addEventListener('click', () => setView('3d'));
+  // 図 / 重ねる / 3D のボタン（data-mode に表示の名前）
+  ['showChart', 'showBoth', 'show3d'].forEach(id => el(id).addEventListener('click', () => { setView(el(id).dataset.mode); renderLesson(); }));
   new ResizeObserver(draw).observe(el('chart'));
   showStep(1);
   let last = performance.now();
@@ -174,7 +174,7 @@ const valueText = key => { const c = lesson().controls.find(x => x[1] === key); 
 
 function draw() {
   const l = lesson();
-  if (view.mode === 'chart') drawChart(l.chart());
+  if (view.mode !== '3d') drawChart(l.chart());
   el('readout').innerHTML = l.readout ? l.readout() : '';
   (l.actions || []).forEach((a, k) => { const b = el('controls').querySelector(`[data-action="${k}"]`); if (b) b.classList.toggle('current', !!(a[2] && a[2]())); });
 }
@@ -194,7 +194,7 @@ function showStep(step) {
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
   el('run').textContent = l.runLabel || '';
-  setView(view.want);
+  setView(l.scene && (l.start || l.overlay) ? 'both' : view.want);   // 動かして見る項目は、3D に図を重ねて始める
   renderLesson();
 }
 

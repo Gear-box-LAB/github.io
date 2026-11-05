@@ -5,7 +5,7 @@
 //   name: 名前（図の下に札で出す）、J: 慣性モーメント (kg·m²)、x: 左右の位置
 //   build(group): 回る部分の形、decor(group): 回らない部分の形（キャリパー、メーターなど）
 //   torque: かけるトルク（なければ p.torque）、goal: ここまで回したら止める回転数 (rpm)
-//   update(b, dt): 段階ごとの動き（メーターの針、熱で光る、地面が流れる など）
+//   update(b, dt): 段階ごとの動き（メーターの針、熱で光る など）
 
 const el = id => document.getElementById(id);
 const n0 = v => Math.round(v);
@@ -21,18 +21,13 @@ const p = {
   tire: 0.33,       // 段階3: タイヤの外径の半分 (m)
   throttle: 40,     // 段階4: エンジンのトルク (N·m)
   ratio: 3,         // 段階6: ギヤ比
-  gear: 0,          // 段階7: 選んだ段
-  syncJ: 0.012,     // 段階8: 回転を合わせる側の慣性モーメント
-  syncDiff: 1500,   // 段階8: 回転差 (rpm)
-  syncT: 15         // 段階8: シンクロの摩擦トルク
+  syncJ: 0.012,     // 段階7: 回転を合わせる側の慣性モーメント
+  syncDiff: 1500,   // 段階7: 回転差 (rpm)
+  syncT: 15         // 段階7: シンクロの摩擦トルク
 };
 
 // ギヤボックスLABの初期値（1速〜6速の変速比、最終減速比、タイヤ半径）と、説明用の仮の値
-const RATIOS = [['1速', 3.64], ['2速', 2.10], ['3速', 1.38], ['4速', 1.00], ['5速', 0.79], ['6速', 0.65]];
 const CAR = { mass: 1000, tire: 0.315, final: 4.1 };
-const PARTS = [['エンジン（クランク、ピストンなど）', 0.05], ['フライホイール', 0.10], ['クラッチ（エンジン側）', 0.02], ['クラッチディスク', 0.004], ['インプット軸、カウンタ軸、ギヤ', 0.008]];
-const ENGINE_J = PARTS.reduce((s, x) => s + x[1], 0);
-const vehicleJ = i => CAR.mass * CAR.tire ** 2 / (i * CAR.final) ** 2;   // 車をエンジンから見た慣性モーメント
 const REDLINE = 6500;
 
 // ---------- 形（1単位 = 1 m） ----------
@@ -135,16 +130,6 @@ const WHY = {
     mark: { body: 1, decor: true, text: '速さ 1/i → エネルギー 1/i²' } },
   alphaRatio: { text: 'α = T ÷ J で、J が 1/i² に見えるので、同じトルクなら α は i² 倍になります。',
     mark: { body: 1, text: 'J が 1/i² → α は i² 倍' } },
-  engineJ: { text: '空ぶかしのとき、エンジンが回すのはこれらの回る部品だけです。同じ速さで回る部品の J は、そのまま足し算できます。',
-    mark: { body: 0, text: '同じ速さで回る部品は足し算' } },
-  vehicleJ: { text: '車の重さ m は回っていませんが、車速 v = エンジンの ω × r ÷ (i × i<sub>f</sub>) の関係でつながっています。車が進むエネルギー 1/2 × m × v² をエンジンの ω で書くと、1/2 × m × r² ÷ (i × i<sub>f</sub>)² × ω² です。これを 1/2 × J × ω² と比べると、エンジンから見た車の J が出ます。',
-    mark: { body: 0, decor: true, text: '車の重さも、エンジンから見ると J' } },
-  allGears: { text: '変速比 i が大きい段（低い段）ほど、(i × i<sub>f</sub>)² で割るので、車の J が小さく見えます。だから低い段ほど、エンジンの回転が速く上がります。' },
-  alphaCar: { text: 'T = J × α を α について解きます。段に入っていれば J はエンジン側 + 車、クラッチを切ればエンジン側だけです。',
-    mark: { body: 0, decor: true, text: 'α = T ÷ (エンジン側 + 車の J)' } },
-  drive: { text: 'ギヤでトルクは i × i<sub>f</sub> 倍になってタイヤに届きます。タイヤは半径 r の所で地面を押すので、力 = タイヤのトルク ÷ r です（ここでは伝達効率は 1 としています）。',
-    mark: { body: 0, decor: true, text: '力 = タイヤのトルク ÷ r' } },
-  road: { text: '転がり抵抗は、タイヤが路面を押す力（重さ m × g）に比例します。空気抵抗は、押しのける空気の量も、その空気に与える速さも車速に比例するので、v² に比例します。' },
   dOmega: { text: '回転数 n (rpm) は1分間に回る回数です。1回転 = 2π rad、1分 = 60 秒なので、rad/s に直すと 2π × n ÷ 60 です。' },
   syncTime: { text: 'シンクロの摩擦トルク T<sub>s</sub> が、合わせる側を一定の角加速度 α = T<sub>s</sub> ÷ J で速くします。回転差 Δω を埋めるのにかかる時間は、Δω ÷ α = J × Δω ÷ T<sub>s</sub> です。',
     mark: { body: 0, text: '摩擦トルクが回転差を埋める' } },
@@ -308,30 +293,6 @@ const LESSONS = [
     ]
   },
   {
-    name: 'ギヤボックスのイナーシャ', title: 'エンジンから見た車の重さは、段で変わる',
-    inputs: [['段', 'gear', 0, 5, 1]],
-    bodies: () => [carRig()],
-    throttle: true,
-    text: [
-      'エンジンがアクセルで速く回ろうとするとき、回さないといけない物は2つあります。エンジン側の回る部品（フライホイールなど）と、段に入っていれば車そのものです。',
-      '車は回転していませんが、タイヤを通してエンジンとつながっているので、エンジンから見ると「回しにくさ」を持ちます。換算した慣性モーメントは m × r² / (変速比 × 最終減速比)² です。',
-      '図の車で、段を選んで「アクセルを踏む」を押してください（トルク 150 N·m）。1速ではエンジンが一気に吹け上がり、すぐレッドゾーンに着きます。高い段では車が重く見え、なかなか回転が上がりません。地面の流れと、車速の数字で比べてください。',
-      '「自動で変速（1速 → 6速）」を押すと、1速から発進し、6,000 rpm で1段ずつ上げていきます。上の段ほどエンジンの回転の上がり方が遅くなり、6速では、走行抵抗（転がり抵抗と空気抵抗）に勝つのがやっとになります。上の段で速く加速するには、もっと大きなトルクが要る、ということです。',
-      '同じ理由で、クラッチを切るとエンジン側の J だけになり、空ぶかしするとすぐ回転が上がります。値はギヤボックスLABの初期値と、説明用の仮の値です。'
-    ],
-    formula: b => {
-      const i = RATIOS[p.gear][1];
-      return [
-        ['エンジン側の J', 'エンジン + フライホイール + クラッチ', PARTS.map(x => `${x[0]} ${x[1]}`).join('、') + ` → 合計 ${n3(ENGINE_J)} kg·m²`, WHY.engineJ],
-        ['車をエンジンから見た J', `${sub('J', 'v')} = m × r² / (i × ${sub('i', 'f')})²`, `${CAR.mass} × ${CAR.tire}² ÷ (${i} × ${CAR.final})² = ${n3(vehicleJ(i))} kg·m²`, WHY.vehicleJ],
-        ['全段の比較', '段: 車の J（エンジンから見た値）', RATIOS.map(r => `${r[0]} ${n3(vehicleJ(r[1]))}`).join('、'), WHY.allGears],
-        ['トルク 150 N·m での回転の上がり方（止まっているとき）', 'α = T / (J + Jv)', `${RATIOS[p.gear][0]}: 1秒に ${n0(150 / b[0].J / RPM)} rpm、クラッチを切ると 1秒に ${n0(150 / ENGINE_J / RPM)} rpm`, WHY.alphaCar],
-        ['タイヤが地面を押す力（駆動力）', `${sub('F', 'd')} = T × i × ${sub('i', 'f')} / r`, RATIOS.map(r => `${r[0]} ${n0(150 * r[1] * CAR.final / CAR.tire)} N`).join('、'), WHY.drive],
-        ['走行抵抗', 'F = μ × m × g + 1/2 × ρ × Cd·A × v²', `時速 100 km で ${n0(roadForce(100 / 3.6))} N、時速 150 km で ${n0(roadForce(150 / 3.6))} N（駆動力から引いた残りが、加速に使われる）`, WHY.road]
-      ];
-    }
-  },
-  {
     name: 'シンクロと同期時間', title: '回転を合わせる時間は、合わせる側の J で決まる',
     slowmo: 10,   // 実際は 0.1 秒ほどで終わるので、10倍ゆっくり見せる
     inputs: [['合わせる側の J (kg·m²)', 'syncJ', 0.004, 0.04, 0.002], ['回転差 Δn (rpm)', 'syncDiff', 200, 3000, 100], ['シンクロの摩擦トルク (N·m)', 'syncT', 5, 40, 1]],
@@ -379,62 +340,8 @@ function meter(g, J) {
   add(g, new THREE.BoxGeometry(0.1, 0.4, 0.002), 0x55656e, -0.42, -0.1, -0.05, { transparent: true, opacity: 0.4 });   // 1 kg·m² の目盛り
 }
 
-// 段階7: 横から見た車。前にエンジンとフライホイール、後ろにタイヤ。地面のしま模様が流れる
-// 走行抵抗（転がり抵抗 + 空気抵抗）も入れる。自動で変速するときは、6,000 rpm で1段上げる
-const SHIFT_RPM = 6000;
-const roadForce = v => 0.012 * CAR.mass * 9.81 + 0.5 * 1.2 * 0.65 * v * v;   // 走行抵抗 (N)。v = 車速 (m/s)
-const ratioOf = b => RATIOS[b.gear][1] * CAR.final;                          // 変速比 × 最終減速比
 
-function carRig() {
-  const wheelParts = [-0.55, 1.75].map(dx => ({ x: dx, y: -0.25, z: 0.3, ratio: 1 / (RATIOS[p.gear][1] * CAR.final), build: w => { w.scale.setScalar(0.7); wheel(w, 0.21, COLOR.alu, 5, 0.315); } }));
-  return {
-    gear: p.gear, name: `エンジン側 + ${RATIOS[p.gear][0]}で見た車`, J: ENGINE_J + vehicleJ(RATIOS[p.gear][1]), torque: 150, goal: REDLINE, x: -0.6, tagY: 0.95,
-    tags: [['エンジン', -0.3, -0.25], ['フライホイール', 0, 0.3], ['トランスミッション', 0.35, -0.2], ['プロペラシャフト', 1.0, -0.25], ['後輪', 1.75, 0.15]],
-    build: g => { flywheel(g, true); },   // 回る本体 = フライホイール（エンジンの回転）
-    parts: wheelParts,
-    // エンジンから見た走行抵抗のトルク = 走行抵抗 × タイヤの半径 / (変速比 × 最終減速比)
-    load: b => roadForce(b.omega / ratioOf(b) * CAR.tire) * CAR.tire / ratioOf(b),
-    decor: g => {
-      const body = tagPart(add(g, new THREE.BoxGeometry(3.2, 0.55, 0.9), COLOR.body, 0.6, 0.15, 0, { transparent: true, opacity: 0.18, depthWrite: false }), 'body');
-      body.material.side = THREE.DoubleSide;
-      add(g, new THREE.BoxGeometry(1.2, 0.35, 0.85), COLOR.body, 0.7, 0.55, 0, { transparent: true, opacity: 0.18, depthWrite: false });
-      tagPart(add(g, new THREE.BoxGeometry(0.35, 0.3, 0.3), COLOR.dark, -0.3, 0.05, 0), 'engineBox');   // エンジン
-      tagPart(add(g, new THREE.BoxGeometry(0.6, 0.16, 0.16), COLOR.steel, 0.35, 0.02, 0), 'transmission'); // トランスミッション
-      tagPart(add(g, cyl(0.025, 1.6).rotateY(Math.PI / 2), COLOR.steel, 1.0, -0.12, 0), 'propShaft');   // プロペラシャフト
-      const ground = tagPart(new THREE.Group(), 'road');
-      ground.position.y = -0.52;
-      for (let k = -6; k <= 6; k++) add(ground, new THREE.BoxGeometry(0.25, 0.01, 1.4), k % 2 ? 0x2b3e47 : 0x3d5560, 0.6 + k * 0.5, 0, 0);
-      g.add(ground);
-      g.userData.ground = ground;
-    },
-    update: (b, dt) => {
-      b.road = (b.road || 0) + b.omega / ratioOf(b) * CAR.tire * dt / 20;   // 地面が流れた距離。1/20 の速さで見せる
-      b.decor.userData.ground.position.x = (((b.road % 1) + 1) % 1);            // しま模様は 1 m ごとに同じ
-      b.speed = b.omega / ratioOf(b) * CAR.tire * 3.6;
-      if (b.auto && state.pushing && b.omega >= SHIFT_RPM * RPM && b.gear < RATIOS.length - 1) shiftUp(b);
-      if (!b.auto && b.omega >= REDLINE * RPM && state.pushing) banner(`レッドゾーン！ ${RATIOS[b.gear][0]}で時速 ${n0(b.speed)} km。次の段へシフトアップ`);
-    }
-  };
-}
-
-// 1段上げる: 車速はそのまま。エンジンの回転数は、新しい変速比に合わせて下がる。J も新しい段の値になる
-function shiftUp(b) {
-  const before = ratioOf(b);
-  b.gear += 1;
-  p.gear = b.gear;
-  b.omega *= ratioOf(b) / before;
-  b.J = ENGINE_J + vehicleJ(RATIOS[b.gear][1]);
-  b.parts.forEach(part => { part.ratio = 1 / ratioOf(b); });
-  b.name = `エンジン側 + ${RATIOS[b.gear][0]}で見た車`;
-  el('tags').children[0].textContent = b.name;
-  const slider = document.querySelector('[data-key="gear"]');
-  slider.value = b.gear;
-  slider.nextElementSibling.textContent = RATIOS[b.gear][0];
-  banner(`${RATIOS[b.gear][0]}へシフトアップ（時速 ${n0(b.speed)} km、${n1(b.time)} 秒）`);
-  renderLesson();
-}
-
-// 段階8: 1本の軸の上に、左から ギヤ（ドグ歯とコーン付き）→ シンクロナイザリング → ハブとスリーブ が並ぶ
+// 段階7: 1本の軸の上に、左から ギヤ（ドグ歯とコーン付き）→ シンクロナイザリング → ハブとスリーブ が並ぶ
 // ギヤは軸の上で空回り。ハブは軸に固定され、スリーブとリングはハブと一緒に回る（アウトプット軸の速さ）
 // 位置は、ギヤの中心からの軸方向の距離 (m)。部品がぶつからないように、半径と位置を決めている
 const SYNC = { dog: 0.04, cone: 0.09, ringFree: 0.2, ringPress: 0.12, hub: 0.32, sleeveFree: 0.32, sleevePush: 0.26, sleeveDone: 0.065 };
@@ -546,14 +453,14 @@ function build() {
 
 function frameCamera() {
   // 段階ごとの、見せたい幅 (m)
-  const width = { 1: 1.4, 2: 1.3, 3: 1.9, 4: 1.5, 5: 1.1, 6: 2.4, 7: 3.6, 8: 1.0 }[state.step];
+  const width = { 1: 1.4, 2: 1.3, 3: 1.9, 4: 1.5, 5: 1.1, 6: 2.4, 7: 1.0 }[state.step];
   const half = Math.tan(camera.fov * Math.PI / 360);
-  const height = state.step === 8 ? 0.45 : 0.75;   // 縦に見せたい高さの半分 (m)
+  const height = state.step === 7 ? 0.45 : 0.75;   // 縦に見せたい高さの半分 (m)
   const distance = Math.max(width / 2 / (half * camera.aspect), height / half) * 1.1;
   const strip = LESSONS[state.step - 1].strip;   // 下に道路を出す段階は、図を少し上に寄せる
   controls.target.set(0, strip ? -0.18 : 0, 0);
   camera.position.set(width * 0.08, distance * 0.18 + (strip ? -0.18 : 0), distance);
-  if (state.step === 8) {   // 軸を斜め前から見る
+  if (state.step === 7) {   // 軸を斜め前から見る
     controls.target.set(-0.1, 0, 0);
     camera.position.set(0.25, 0.4, 1.15 / Math.min(1, camera.aspect));
   }
@@ -577,12 +484,11 @@ function frame(now) {
   const dtp = dt / (lesson.slowmo || 1);   // 計算の時間（スローのときは短くする）
   bodies.forEach(b => {
     const goal = (b.goal || 3000) * RPM;
-    const load = b.load ? b.load(b) : 0;   // 走行抵抗など、回転を止めようとするトルク
     if (state.pushing && b.omega < goal) {
-      b.omega = Math.min(goal, Math.max(0, b.omega + ((b.torque || p.torque) - load) / b.J * dtp));
+      b.omega = Math.min(goal, Math.max(0, b.omega + (b.torque || p.torque) / b.J * dtp));
       b.time += dtp;
       if (b.omega >= goal && !b.finished) finish(b);
-    } else if (!state.pushing && load) b.omega = Math.max(0, b.omega - load / b.J * dtp);   // アクセルを離すと、走行抵抗で遅くなる
+    }
     if (b.update) b.update(b, dt);
     b.angle += b.omega * dtp / 20;     // 目で追えるように、1/20 の速さで見せる
     b.distance = (b.distance || 0) + b.omega * (b.roll || 0.3) * dtp;   // そのホイールで走ったときの距離 (m)
@@ -695,7 +601,7 @@ function placeTag(tag, x, y, rect, up) {
 }
 
 function showReadout() {
-  el('readout').innerHTML = bodies.map(b => `${b.name}: ${n0(b.omega / RPM)} rpm（J = ${n3(b.J)} kg·m²、回転のエネルギー ${n0(0.5 * b.J * b.omega ** 2)} J${b.speed !== undefined ? `、車速 ${n0(b.speed)} km/h` : ''}）`).join('<br>')
+  el('readout').innerHTML = bodies.map(b => `${b.name}: ${n0(b.omega / RPM)} rpm（J = ${n3(b.J)} kg·m²、回転のエネルギー ${n0(0.5 * b.J * b.omega ** 2)} J）`).join('<br>')
     + `<br>回転は、目で追えるように 1/20 の速さで見せています。${LESSONS[state.step - 1].slowmo ? `時間も ${LESSONS[state.step - 1].slowmo} 倍ゆっくり進めています（表示の秒数は実際の時間）。` : ''}`;
   if (state.tab === 'formula' && state.step === 5) refreshNums(el('lessonOutput'), LESSONS[4].formula(bodies));
 }
@@ -716,10 +622,9 @@ function renderSteps() {
 function renderControls() {
   const l = LESSONS[state.step - 1];
   el('controls').innerHTML = (l.inputs || []).map(([label, key, min, max, step]) =>
-    `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${p[key]}"> <span>${key === 'gear' ? RATIOS[p.gear][0] : p[key]}</span></label>`).join('');
+    `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${p[key]}"> <span>${p[key]}</span></label>`).join('');
   el('strip').hidden = !l.strip;
-  el('auto').hidden = state.step !== 7;
-  el('push').textContent = l.strip ? '回す' : l.race ? 'よーいドン' : state.step === 8 ? 'シンクロで合わせる' : state.step === 4 || state.step === 7 ? 'アクセルを踏む' : '回す';
+  el('push').textContent = l.strip ? '回す' : l.race ? 'よーいドン' : state.step === 7 ? 'シンクロで合わせる' : state.step === 4 ? 'アクセルを踏む' : '回す';
   el('stop').textContent = l.brake ? 'ブレーキ' : '止める';
 }
 
@@ -757,16 +662,6 @@ el('push').addEventListener('click', () => {
   el('banner').hidden = true;
   state.pushing = true;
 });
-// 段階7: 1速から順に、6,000 rpm で1段ずつ上げながら加速する
-el('auto').addEventListener('click', () => {
-  p.gear = 0;
-  build();
-  renderControls();
-  bodies[0].auto = true;
-  el('banner').hidden = true;
-  state.pushing = true;
-  renderLesson();
-});
 el('stop').addEventListener('click', () => {
   state.pushing = false;
   // 段階5はブレーキで少しずつ止める（熱が出る）。ほかはすぐ止める
@@ -775,7 +670,7 @@ el('stop').addEventListener('click', () => {
 el('controls').addEventListener('input', e => {
   const key = e.target.dataset.key;
   p[key] = Number(e.target.value);
-  e.target.nextElementSibling.textContent = key === 'gear' ? RATIOS[p.gear][0] : p[key];
+  e.target.nextElementSibling.textContent = p[key];
   state.pushing = false;
   build();
   renderLesson();

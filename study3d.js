@@ -5,7 +5,7 @@
 //   'race'   加速くらべの4台（engine.js の racers）
 
 const SLOW = 10;   // 動きは 1/10 の速さで見せる（エンジンは 1/50）
-const view = { labelScale: 1, want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [], markSpec: null, mark: null };   // markSpec: 数式の考え方の印（explain.js）   // want: 選んだ表示、mode: 今の表示
+const view = { labelScale: 1, want: 'chart', mode: 'chart', three: null, world: null, scene: null, items: [], markSpec: null, mark: null };   // markSpec: 数式の考え方の印（explain.js）   // want: ページのはじめの表示、mode: 今の表示
 
 // ---------- 準備（3D を初めて開いたときに1回） ----------
 function init3d() {
@@ -440,14 +440,14 @@ function partsOf(name) {
 
 function setMark(spec) {
   view.markSpec = spec;
-  if (view.mode === '3d') buildMark();
+  if (has3d()) buildMark();
 }
 
 function buildMark() {
   if (view.mark) { view.world.remove(view.mark.group); view.mark.arrows.forEach(a => a.setColor(a.userData.color)); view.mark.mats.forEach(m => m.emissive.setRGB(0, 0, 0)); }
   view.mark = null;
   const m = view.markSpec;
-  if (view.mode === '3d') el('hint3d').hidden = false;
+  if (has3d()) el('hint3d').hidden = false;
   if (!m || view.scene === 'race') return;
   const group = new THREE.Group();
   view.world.add(group);
@@ -506,22 +506,23 @@ function updateMark(dt) {
 }
 
 // ---------- 図と3Dの切り替え ----------
-function setView(want) {
+// mode: 'chart' 図だけ、'3d' 3D だけ、'both' 3D の上に図を透かして重ねる
+function setView(mode) {
   const l = lesson();
-  view.want = want;
-  view.mode = l.scene ? want : 'chart';
-  el('chart').hidden = view.mode !== 'chart';
-  el('scene3d').hidden = el('hint3d').hidden = view.mode !== '3d';
-  el('show3d').disabled = !l.scene;
-  el('show3d').title = l.scene ? '' : 'ここは図だけです';
-  el('showChart').classList.toggle('current', view.mode === 'chart');
-  el('show3d').classList.toggle('current', view.mode === '3d');
-  if (view.mode === '3d') { if (!view.three) init3d(); build3d(); } else showPart(null);
+  view.mode = l.scene ? mode : 'chart';
+  el('chart').hidden = view.mode === '3d';
+  el('chart').classList.toggle('overlay', view.mode === 'both');
+  el('scene3d').hidden = el('hint3d').hidden = view.mode === 'chart';
+  ['showChart', 'showBoth', 'show3d'].forEach(id => el(id).classList.toggle('current', el(id).dataset.mode === view.mode));
+  ['showBoth', 'show3d'].forEach(id => { el(id).disabled = !l.scene; el(id).title = l.scene ? '' : 'ここは図だけです'; });
+  if (view.mode !== 'chart') { if (!view.three) init3d(); build3d(); } else showPart(null);
 }
+const has3d = () => view.mode !== 'chart';
+const redo3d = () => setView(has3d() ? view.mode : '3d');   // 3D を作り直す（図だけのときは 3D にする）
 
 // 毎フレーム（study.js のループから呼ぶ）
 function frame3d(dt) {
-  if (view.mode !== '3d') return;
+  if (!has3d()) return;
   if (view.scene === 'custom') lesson().update3d(view.items, dt);
   else ({ car: updateCar, engine: updateEngine, race: updateRace, carEngine: updateCarEngine })[view.scene](dt);
   updateMark(dt);

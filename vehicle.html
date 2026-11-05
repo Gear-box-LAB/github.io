@@ -22,14 +22,15 @@
   <section class="stage">
     <div class="view3d">
       <canvas id="scene3d" hidden aria-label="3Dの図"></canvas>
+      <canvas id="chart" aria-label="車両運動性能のグラフ"></canvas>
       <p class="hint" id="hint3d" hidden></p>
       <div class="partInfo" id="partInfo" hidden></div>
-      <canvas id="chart" aria-label="車両運動性能のグラフ"></canvas>
     </div>
     <div class="bar">
       <div class="buttons">
-        <button type="button" id="showChart">図</button>
-        <button type="button" id="show3d">3D</button>
+        <button type="button" id="showChart" data-mode="chart">図</button>
+        <button type="button" id="showBoth" data-mode="both">重ねる</button>
+        <button type="button" id="show3d" data-mode="3d">3D</button>
         <button type="button" id="run" hidden></button>
       </div>
       <div class="buttons" id="controls"></div>
@@ -60,5 +61,6 @@
 <script src="dyn.js"></script>
 <script src="vdyn3d.js"></script>
 <script src="vehicle.js"></script>
+<script src="resize.js"></script>
 </body>
 </html>
