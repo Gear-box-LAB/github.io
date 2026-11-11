@@ -127,10 +127,11 @@ function build3d() {
   camera.position.set(...cam[0]);
   controls.target.set(...cam[1]);
   // 縦長の画面（スマホ）では、札が左右で見切れないように、カメラを少し引く
+  // 横に細長いとき（並べるときの上半分）は、物が小さくならないように、カメラを寄せる
   const aspect = el('scene3d').clientWidth / Math.max(1, el('scene3d').clientHeight);
-  const pull = aspect < 1.5 ? Math.min(2.4, 1.5 / aspect) : 1;
+  const pull = aspect < 1.5 ? Math.min(2.4, 1.5 / aspect) : aspect > 2 ? Math.max(0.6, 2 / aspect) : 1;
   camera.position.sub(controls.target).multiplyScalar(pull).add(controls.target);
-  view.labelScale = Math.sqrt(pull);
+  view.labelScale = Math.sqrt(Math.max(1, pull));
   if (l.scene === 'custom') view.items = l.build3d(view.world);   // 項目が自分で組み立てる（trans.js など）
   else ({ car: buildCar, engine: buildEngine, race: buildRace, carEngine: buildCarEngine })[l.scene]();
   controls.update();
@@ -506,12 +507,12 @@ function updateMark(dt) {
 }
 
 // ---------- 図と3Dの切り替え ----------
-// mode: 'chart' 図だけ、'3d' 3D だけ、'both' 3D の上に図を透かして重ねる
+// mode: 'chart' 図だけ、'3d' 3D だけ、'both' 3D と図を並べる（style.css の .split）
 function setView(mode) {
   const l = lesson();
   view.mode = l.scene ? mode : 'chart';
   el('chart').hidden = view.mode === '3d';
-  el('chart').classList.toggle('overlay', view.mode === 'both');
+  el('chart').parentElement.classList.toggle('split', view.mode === 'both');
   el('scene3d').hidden = el('hint3d').hidden = view.mode === 'chart';
   ['showChart', 'showBoth', 'show3d'].forEach(id => el(id).classList.toggle('current', el(id).dataset.mode === view.mode));
   ['showBoth', 'show3d'].forEach(id => { el(id).disabled = !l.scene; el(id).title = l.scene ? '' : 'ここは図だけです'; });

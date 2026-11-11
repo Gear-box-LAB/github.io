@@ -39,8 +39,6 @@ h1 { font-size: 18px; white-space: nowrap; }
 /* グラフで学ぶページ: 図の場所いっぱいにグラフを出す */
 #chart, #scene3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #scene3d { cursor: grab; }
-/* 重ねる: 3D の上に図を透かして出す。図はさわれないようにして、3D を回せるようにする */
-#chart.overlay { pointer-events: none; background: rgba(20, 35, 43, 0.45); }
 /* 加速くらべの結果の表（3D の右上。車が見えるように小さく、透かす） */
 .results { position: absolute; top: 8px; right: 8px; padding: 6px 8px; background: rgba(20, 35, 43, 0.8); border-radius: 4px; color: #dfe6e9; font-size: 12px; }
 .results td { padding: 3px 6px; border-color: rgba(223, 230, 233, 0.2); }
@@ -102,10 +100,18 @@ input[type="number"] { width: 100%; min-width: 60px; }
 .stage.real { --hint: #3a4148; }   /* 実物の色のときは背景が明るいので、説明の文字を濃くする */
 .stage { position: relative; display: flex; flex-direction: column; background: var(--stage); min-width: 0; min-height: 0; overflow: hidden; }
 /* 図（canvas）の下に操作の帯を置き、帯が図に重ならないようにする */
-.view3d { position: relative; flex: 1; min-height: 0; }
+.view3d { position: relative; flex: 1; min-height: 0; container-type: size; }
+/* 並べる: 3D と図を重ねずに、上（3D）と下（図）に分けて出す */
+.split #scene3d { inset: 0 0 45% 0; height: 55%; }
+.split #chart { inset: 55% 0 0 0; height: 45%; border-top: 1px solid var(--line); }
+@container (min-aspect-ratio: 11 / 5) {   /* とても横長のときだけ左右に並べる */
+  .split #scene3d { inset: 0 50% 0 0; width: 50%; height: 100%; }
+  .split #chart { inset: 0 0 0 50%; width: 50%; height: 100%; border-top: 0; border-left: 1px solid var(--line); }
+  .split .hint { max-width: 22%; }   /* 説明は 3D の側に収める */
+  .split .results { right: calc(50% + 8px); }   /* 加速くらべの表も 3D の側へ */
+}
 #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
 .hint { position: absolute; top: 10px; left: var(--space); max-width: 40%; color: var(--hint); font-size: 13px; pointer-events: none; }
-#chart.overlay + .hint { top: 40px; left: 72px; padding: 6px 8px; background: rgba(20, 35, 43, 0.85); border-radius: 4px; }   /* 重ねるときは、図の目盛りの上に読める地をしく */
 /* 右上: 配色と、車に載せるかの切り替え */
 .view { position: absolute; top: 8px; right: var(--space); justify-content: flex-end; max-width: 48%; }
 .view button { font-size: 12px; padding: 3px 8px; }
@@ -226,6 +232,7 @@ select { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   .steps { flex-wrap: nowrap; overflow-x: auto; }
   .stage { height: auto; }
   .view3d { flex: none; height: 55vh; }   /* 帯の高さに関係なく、図の高さを保つ */
+  .view3d.split { height: 80vh; }        /* 並べるときは、上下に2つ入る高さにする */
   .bar { padding: 6px 8px; gap: 6px 10px; }
   .bar input { width: 64px; }
   .panel { border-left: 0; }

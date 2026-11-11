@@ -64,6 +64,7 @@ function drawChart(spec) {
   // square: 縦と横の目盛りの長さをそろえる（円が円に見えるように）。横の範囲を広げる
   if (spec.square) { const mid = (xMin + xMax) / 2, half = (w - pad.left - pad.right) / (h - pad.top - pad.bottom) * (spec.yMax - yMin) / 2; xMin = mid - half; xMax = mid + half; }
   const x = v => pad.left + (v - xMin) / (xMax - xMin) * (w - pad.left - pad.right);
+  const xStep = spec.xStep * Math.max(1, Math.round((xMax - xMin) / (spec.xMax - (spec.xMin || 0))));   // 横を広げたときは、目盛りの間を広げる
   const y = v => h - pad.bottom - (v - yMin) / (spec.yMax - yMin) * (h - pad.top - pad.bottom);
 
   // 目盛り
@@ -77,7 +78,7 @@ function drawChart(spec) {
     g.fillText(Number(v.toFixed(2)), pad.left - 6, y(v));
   }
   g.textAlign = 'center'; g.textBaseline = 'top';
-  for (let v = Math.ceil(xMin / spec.xStep - 1e-9) * spec.xStep; v <= xMax + 1e-9; v += spec.xStep) {
+  for (let v = Math.ceil(xMin / xStep - 1e-9) * xStep; v <= xMax + 1e-9; v += xStep) {
     g.beginPath(); g.moveTo(x(v), pad.top); g.lineTo(x(v), h - pad.bottom); g.stroke();
     g.fillText(Number(v.toFixed(2)), x(v), h - pad.bottom + 6);
   }
@@ -155,7 +156,7 @@ function startCourse(lessons, note) {
     if (lesson().start) state.running = true;
     draw();
   });
-  // 図 / 重ねる / 3D のボタン（data-mode に表示の名前）
+  // 図 / 並べる / 3D のボタン（data-mode に表示の名前）
   ['showChart', 'showBoth', 'show3d'].forEach(id => el(id).addEventListener('click', () => { setView(el(id).dataset.mode); renderLesson(); }));
   new ResizeObserver(draw).observe(el('chart'));
   showStep(1);
@@ -197,7 +198,7 @@ function showStep(step) {
     `<label>${label} <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${P[key]}"> <span>${valueText(key)}</span></label>`).join('');
   el('run').hidden = !l.start;
   el('run').textContent = l.runLabel || '';
-  setView(l.scene && (l.start || l.overlay) ? 'both' : view.want);   // 動かして見る項目は、3D に図を重ねて始める
+  setView(l.scene && (l.start || l.split) ? 'both' : view.want);   // 動かして見る項目は、3D と図を並べて始める
   renderLesson();
 }
 

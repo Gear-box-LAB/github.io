@@ -343,7 +343,7 @@ const LESSONS_RUN = [
   },
   {
     name: 'シフトとアクセル', title: 'N・R・1速〜6速で、アクセルとアップシフトのときのエンジンの動き',
-    scene: 'carEngine', live: true, overlay: true,
+    scene: 'carEngine', live: true, split: true,
     actions: [['自動で見る', startScript, () => !!R.script]]
       .concat(SHIFTS.map((x, g) => [x[0], () => { manual(); shiftTo(g); }, () => R.target === g]))
       .concat([['ブレーキ', () => { manual(); R.brake = true; R.msg = 'ブレーキで止めます。'; }, () => R.brake]]),
