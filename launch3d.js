@@ -36,7 +36,8 @@ function buildTire(world) {
   world.add(road);
   box(road, 4, 0.02, 0.7, 0x4a5258, 0, -0.01, 0);
   const marks = new THREE.Group();
-  for (let x = -2; x < 2; x += 0.25) box(marks, 0.06, 0.004, 0.5, 0xb9c7cd, x, 0.002, 0);
+  // 路面の印: 車速で流れる。まぶしくちらつかないように、路面に近い暗い色で、間をあけて置く
+  for (let x = -2; x < 2; x += 0.5) box(marks, 0.04, 0.002, 0.5, 0x5c666c, x, 0.003, 0);
   road.add(marks);
   // タイヤ（中の接地面が見えるように透かす）。溝の線で回り方を見せる
   const tire = tagPart(new THREE.Group(), 'tire');
@@ -69,7 +70,7 @@ function buildTire(world) {
 const FORCE_LEN = 0.05 / 1000;   // 力 1 kN を 5 cm の矢印にする
 function updateTire(it, dt, o) {
   const r = CAR.tire, wr = o.v / (1 - Math.min(0.95, o.s));   // タイヤの周速 ω × r
-  it.marks.position.x = ((it.marks.position.x - o.v * dt) % 0.25 + 0.25) % 0.25 - 0.125;
+  it.marks.position.x = ((it.marks.position.x - o.v * dt) % 0.5 + 0.5) % 0.5 - 0.25;
   it.tire.rotation.z -= wr / r * dt;
   // ブラシの毛: 前の端から入ってきた毛は、s × ξ だけたわむ。たわみが摩擦で支えられる限界（放物線）を超えた所は、すべる
   const sSl = PEAK, dMax = PEAK * PATCH.a / 2;   // 接地面が全部すべり始めるスリップ率と、真ん中で支えられる一番大きいたわみ
