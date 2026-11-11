@@ -49,7 +49,7 @@ const resistTotal = (v, grade, mass, cda) => { const r = resist(v, grade, mass, 
 const delta = (g, mass) => (J_ENGINE * total(g) ** 2 + J_WHEELS) / ((mass || CAR.mass) * CAR.tire ** 2);
 
 // ---------- グラフ ----------
-// spec: { xLabel, yLabel, xMax, yMax, yMin, series: [{ name, color, points: [[x, y]], dash, width }], vline: x, dots: [{ x, y, color, label }], xStep, yStep }
+// spec: { xLabel, yLabel, xMin, xMax, yMax, yMin, square, series: [{ name, color, points: [[x, y]], dash, width }], vline: x, dots: [{ x, y, color, label }], xStep, yStep }
 function drawChart(spec) {
   const canvas = el('chart');
   const ratio = window.devicePixelRatio || 1;
@@ -60,7 +60,10 @@ function drawChart(spec) {
   g.clearRect(0, 0, w, h);
   const pad = { left: 64, right: 18, top: 44, bottom: 46 };
   const yMin = spec.yMin || 0;
-  const x = v => pad.left + v / spec.xMax * (w - pad.left - pad.right);
+  let xMin = spec.xMin || 0, xMax = spec.xMax;
+  // square: 縦と横の目盛りの長さをそろえる（円が円に見えるように）。横の範囲を広げる
+  if (spec.square) { const mid = (xMin + xMax) / 2, half = (w - pad.left - pad.right) / (h - pad.top - pad.bottom) * (spec.yMax - yMin) / 2; xMin = mid - half; xMax = mid + half; }
+  const x = v => pad.left + (v - xMin) / (xMax - xMin) * (w - pad.left - pad.right);
   const y = v => h - pad.bottom - (v - yMin) / (spec.yMax - yMin) * (h - pad.top - pad.bottom);
 
   // 目盛り
@@ -74,7 +77,7 @@ function drawChart(spec) {
     g.fillText(Number(v.toFixed(2)), pad.left - 6, y(v));
   }
   g.textAlign = 'center'; g.textBaseline = 'top';
-  for (let v = 0; v <= spec.xMax + 1e-9; v += spec.xStep) {
+  for (let v = Math.ceil(xMin / spec.xStep - 1e-9) * spec.xStep; v <= xMax + 1e-9; v += spec.xStep) {
     g.beginPath(); g.moveTo(x(v), pad.top); g.lineTo(x(v), h - pad.bottom); g.stroke();
     g.fillText(Number(v.toFixed(2)), x(v), h - pad.bottom + 6);
   }
