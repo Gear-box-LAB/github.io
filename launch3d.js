@@ -195,7 +195,7 @@ function buildPack(world) {
     p: tag3d(world, '', -0.05, -0.16, 0, '#7fc8f8', 0.025), t: tag3d(world, '', 0.05, 0.17, 0, '#ffd54f', 0.025) };
   return { plates, piston, oil, springs, line, tags, parts: { piston: [piston, oil], plates, springs, valve: [line] } };
 }
-// p: 油圧 (bar)、kiss: ピストンが板に触れる油圧 (bar)、t: 伝えるトルク (N·m)
+// p: 油圧 (MPa)、kiss: ピストンが板に触れる油圧 (MPa)、t: 伝えるトルク (N·m)
 function updatePack(it, p, kiss, t) {
   const close = Math.min(1, p / kiss), gap = PACK.gap * (1 - close);   // 油圧がキスポイントに届くまでは、すきまが減るだけ
   let x = PACK.back;
@@ -210,8 +210,8 @@ function updatePack(it, p, kiss, t) {
   it.oil.position.x = left + len / 2;
   it.oil.scale.set(Math.max(0.001, len), 1, 1);
   it.springs.forEach(s => { s.position.x = (px + 0.006 + PACK.back) / 2; s.scale.set(PACK.back - px - 0.006, 1, 1); });
-  heat(it.line, Math.min(1, p / 15));
+  heat(it.line, Math.min(1, p / 1.5));
   it.plates.forEach(m => heat(m, close >= 1 ? Math.min(1, t / 250) : 0));
-  setLabel(it.tags.p, `クラッチ圧 ${n1(p)} bar${p < kiss ? '（すきまを詰めている）' : ''}`);
+  setLabel(it.tags.p, `クラッチ圧 ${n2(p)} MPa${p < kiss ? '（すきまを詰めている）' : ''}`);
   setLabel(it.tags.t, `伝えるトルク ${n0(t)} N·m`);
 }

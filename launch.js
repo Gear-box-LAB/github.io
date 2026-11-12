@@ -84,9 +84,9 @@ const offOpt = () => ({ mu: P.mu, cap: 250, ecu: false, aim: 0, time: 2.5 });
 // 3. の発進の力: エンジントルクを、変速機とデフでタイヤの力にしたもの。路面の限界より大きいときは、すべって回る
 const slipFor = (f, mu, w) => { let lo = 0, hi = PEAK; for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; if (muAt(m, mu) * w < f) lo = m; else hi = m; } return lo; };
 // 湿式多板クラッチ: T = n × μc × (P × A − ばねの力) × Rm
-const WET = { mu: 0.12, A: 0.004, Rm: 0.08, kiss: 1.0 };   // 摩擦係数、ピストンの面積 (m²)、摩擦面の平均半径 (m)、キスポイント (bar)
-const torqueOfP = (p, n) => n * WET.mu * Math.max(0, p - WET.kiss) * 1e5 * WET.A * WET.Rm;
-const pOfTorque = (t, n) => WET.kiss + t / (n * WET.mu * 1e5 * WET.A * WET.Rm);
+const WET = { mu: 0.12, A: 0.004, Rm: 0.08, kiss: 0.1 };   // 摩擦係数、ピストンの面積 (m²)、摩擦面の平均半径 (m)、キスポイント (MPa)
+const torqueOfP = (p, n) => n * WET.mu * Math.max(0, p - WET.kiss) * 1e6 * WET.A * WET.Rm;
+const pOfTorque = (t, n) => WET.kiss + t / (n * WET.mu * 1e6 * WET.A * WET.Rm);
 // 油圧の指令: 半クラッチの間はローンチ制御が決めたトルク。つながった後は、すべらないように 1.3 倍の余裕を持たせる
 const pressureOf = (p, n) => pOfTorque(p.lock ? p.te * 1.3 : p.tc, n);
 
@@ -287,7 +287,7 @@ const LESSONS_LAUNCH = [
     controls: [['摩擦面の数 n', 'plates', 4, 12, 2]],
     runLabel: '発進する（油圧の動き）', start: () => startPlay(2.5, 4), tick: tickPlay, reset: () => { PLAY.t = -1; P.plates = 8; P.aim = 10; P.mu = 1.0; },
     build3d: world => buildPack(world),
-    update3d: (it) => { const p = nowPoint(sim(onOpt()), 0), bar = playing() ? pressureOf(p, P.plates) : 0; updatePack(it, bar, WET.kiss, torqueOfP(bar, P.plates)); },
+    update3d: (it) => { const p = nowPoint(sim(onOpt()), 0), mpa = playing() ? pressureOf(p, P.plates) : 0; updatePack(it, mpa, WET.kiss, torqueOfP(mpa, P.plates)); },
     text: [
       '<b>油圧制御はローンチ制御と関係ある？</b> 答えは「半分正解」です。ローンチ制御 = 油圧制御ではありませんが、DCT や AT では、油圧制御が<b>実現手段</b>です。',
       '<b>MT</b>: クラッチは人間の足で操作します（油圧はペダルの力を伝えるだけ）。ECU が助けられるのは、エンジンの回転数を保つこととトルクを下げることだけで、半クラッチは運転する人しだいです。',
@@ -295,17 +295,17 @@ const LESSONS_LAUNCH = [
       '<b>構造</b>: 湿式多板クラッチは、油の中で摩擦板（茶色、内側で変速機側のハブにかみ合う）と鋼板（銀色、外側でエンジン側のドラムにかみ合う）を交互に重ね、ピストン（青）で押し付けます。',
       '<b>見る所</b>: 「発進する（油圧の動き）」を押すと、前の項目のローンチ制御が決めたトルクを作るための油圧が、グラフと 3D で動きます。はじめは、すきまを詰めるだけ（キスポイントまで）です。摩擦面の数を増やすと、同じトルクを低い油圧で作れます。'
     ],
-    symbols: `T: 伝えるトルク、n: 摩擦面の数、${sub('μ', 'c')}: 油の中の摩擦係数（0.12）、P: クラッチ圧、A: ピストンの面積（40 cm²）、${sub('P', 'kiss')}: キスポイントの油圧（1 bar = 戻しばねの力 ÷ A）、${sub('R', 'm')}: 摩擦面の平均半径（8 cm）。`,
+    symbols: `T: 伝えるトルク、n: 摩擦面の数、${sub('μ', 'c')}: 油の中の摩擦係数（0.12）、P: クラッチ圧、A: ピストンの面積（40 cm²）、${sub('P', 'kiss')}: キスポイントの油圧（0.1 MPa = 戻しばねの力 ÷ A）、${sub('R', 'm')}: 摩擦面の平均半径（8 cm）。油圧の単位は MPa（メガパスカル）: 1 MPa = 100 万 Pa = 1 mm² あたり 1 N の力。`,
     formula: () => {
       const s = sim(onOpt()), peak = Math.max(...s.filter(p => !p.lock).map(p => pressureOf(p, P.plates)));
       return [
-        ['湿式多板クラッチのトルク', `T = n × ${sub('μ', 'c')} × (P − ${sub('P', 'kiss')}) × A × ${sub('R', 'm')}`, `1 bar あたり ${n0(torqueOfP(WET.kiss + 1, P.plates))} N·m（n = ${P.plates}）`, WHY.wet],
-        ['キスポイント', `P ≤ ${sub('P', 'kiss')} → T = 0`, `${n1(WET.kiss)} bar まではすきまを詰めるだけ`, WHY.kiss],
-        ['ローンチ制御の油圧の指令', `P = ${sub('P', 'kiss')} + ${sub('T', '目標')} / (n × ${sub('μ', 'c')} × A × ${sub('R', 'm')})`, `半クラッチの間 最大 ${n1(peak)} bar`, WHY.valve]
+        ['湿式多板クラッチのトルク', `T = n × ${sub('μ', 'c')} × (P − ${sub('P', 'kiss')}) × A × ${sub('R', 'm')}`, `0.1 MPa あたり ${n0(torqueOfP(WET.kiss + 0.1, P.plates))} N·m（n = ${P.plates}）`, WHY.wet],
+        ['キスポイント', `P ≤ ${sub('P', 'kiss')} → T = 0`, `${n2(WET.kiss)} MPa まではすきまを詰めるだけ`, WHY.kiss],
+        ['ローンチ制御の油圧の指令', `P = ${sub('P', 'kiss')} + ${sub('T', '目標')} / (n × ${sub('μ', 'c')} × A × ${sub('R', 'm')})`, `半クラッチの間 最大 ${n2(peak)} MPa`, WHY.valve]
       ];
     },
-    chart: () => { const s = sim(onOpt()); return timeChart('クラッチ圧 (bar)', 0, 16, 2, [line(s, p => pressureOf(p, P.plates), `油圧の指令（n = ${P.plates}）`, '#7fc8f8'), { name: 'キスポイント', color: '#d40000', dash: [6, 4], points: [[0, WET.kiss], [2.5, WET.kiss]] }], 2.5); },
-    readout: () => { const p = nowPoint(sim(onOpt()), 0), bar = playing() ? pressureOf(p, P.plates) : 0; return `${n2(p.t)} 秒: クラッチ圧 ${n1(bar)} bar → 伝えるトルク ${n0(torqueOfP(bar, P.plates))} N·m${p.lock ? '（つながった後は 1.3 倍の余裕）' : ''}`; }
+    chart: () => { const s = sim(onOpt()); return timeChart('クラッチ圧 (MPa)', 0, 1.6, 0.2, [line(s, p => pressureOf(p, P.plates), `油圧の指令（n = ${P.plates}）`, '#7fc8f8'), { name: 'キスポイント', color: '#d40000', dash: [6, 4], points: [[0, WET.kiss], [2.5, WET.kiss]] }], 2.5); },
+    readout: () => { const p = nowPoint(sim(onOpt()), 0), mpa = playing() ? pressureOf(p, P.plates) : 0; return `${n2(p.t)} 秒: クラッチ圧 ${n2(mpa)} MPa → 伝えるトルク ${n0(torqueOfP(mpa, P.plates))} N·m${p.lock ? '（つながった後は 1.3 倍の余裕）' : ''}`; }
   }
 ];
 
