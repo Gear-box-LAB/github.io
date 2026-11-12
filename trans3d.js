@@ -97,7 +97,8 @@ function buildParallel(world, opt) {
     world.add(free);
     gear(free, ro, 0.03, ALU, 0, 0, 0, 'x', 'drivenGear');
     const side = k % 2 ? -1 : 1;   // スリーブの側
-    if (opt.dog) for (let j = 0; j < 4; j++) {   // ドグ（大きな爪が4つ）
+    if (opt.ist) for (let j = 0; j < IZ.n; j++) ringTooth(free, j / IZ.n * Math.PI * 2, side * PIST.face, side, true, 0xf0c060, 'camDog');   // IST: カムの斜面付きの爪
+    else if (opt.dog) for (let j = 0; j < 4; j++) {   // ドグ（大きな爪が4つ）
       const a = j / 4 * Math.PI * 2;
       tagPart(box(free, 0.012, 0.012, 0.012, DARK, side * 0.021, 0.022 * Math.cos(a), 0.022 * Math.sin(a)), 'dogTeeth');
     } else {
@@ -112,6 +113,14 @@ function buildParallel(world, opt) {
   // ハブ（軸に固定）とスリーブ（左右に滑る）
   const sleeves = PAR.sleeves.map(x => {
     ringX(outShaft, 0.012, 0.03, 0.02, STEEL, x, 0, 'hub');
+    if (opt.ist) {   // IST: 両側に、歯車と逆の形の爪を持つクラッチ・リング。爪は、角度の差 2α でまっすぐの面どうしが触れる位置に置く
+      const r = new THREE.Group();
+      r.position.set(x, y0, 0);
+      world.add(r);
+      ringX(r, 0.03, 0.042, 2 * PIST.ringHalf, 0x55656e, 0, 0, 'clutchRing');
+      for (let j = 0; j < IZ.n; j++) [-1, 1].forEach(side => ringTooth(r, j / IZ.n * Math.PI * 2 + 2 * IZ.alpha, side * PIST.ringHalf, side, false, 0x7fc8f8, 'clutchRing'));
+      return r;
+    }
     const s = ringX(world, 0.03, 0.042, 0.025, opt.dog ? 0x55656e : DARK, x, y0, opt.dog ? 'dogRing' : 'sleeve');
     if (opt.dog) for (let j = 0; j < 4; j++) [-1, 1].forEach(side => {   // ドグリングの両側の爪
       const a = j / 4 * Math.PI * 2 + Math.PI / 4;
@@ -527,6 +536,25 @@ function toothRow(world, face, gear) {
   const body = tagPart(box(g, 0.03, 0.012, len, gear ? ALU : 0x55656e, -face * 0.015, 0.006, 0), gear ? 'drivenGear' : 'clutchRing');
   for (let k = 0; k < IZ.count; k++) flatTooth(g, (k - (IZ.count - 1) / 2) * IZ.pitch, face, gear, gear ? 0xf0c060 : 0x7fc8f8, gear ? 'camDog' : 'clutchRing');
   return { g, body };
+}
+// 変速機全体（と車に載せたとき）の IST の爪: 拡大の図と同じ角度の形を、輪の上に並べる
+const PIST = { r1: 0.03, r2: 0.042, h: 0.008, face: 0.015, ringHalf: 0.0125 };   // 爪の内と外の半径、高さ、歯車の面の位置（幅の半分）、リングの幅の半分
+PIST.rm = (PIST.r1 + PIST.r2) / 2;
+PIST.w = 2 * IZ.alpha * PIST.rm;
+PIST.s = IZ.slopeA * PIST.rm;
+// theta: 輪の上の角度、x0: 爪の根元の位置、dir: 爪の伸びる向き、vertFront: まっすぐの面が前か
+function ringTooth(parent, theta, x0, dir, vertFront, color, key) {
+  const { w, h, s } = PIST, sh = new THREE.Shape();
+  if (vertFront) sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2, h).lineTo(-w / 2 + s, h).closePath();
+  else sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2 - s, h).lineTo(-w / 2, h).closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: PIST.r2 - PIST.r1, bevelEnabled: false });
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir, 0, 0), new THREE.Vector3(0, dir, 0)));
+  const m = tagPart(new THREE.Mesh(geo, mat(color)), key);
+  m.position.set(x0, dir > 0 ? PIST.r1 : PIST.r2, 0);
+  const pivot = new THREE.Group();
+  pivot.rotation.x = theta;
+  pivot.add(m);
+  parent.add(pivot);
 }
 function buildIstZoom(world) {
   const make = (x, face, name) => {   // face: 歯車の爪の向き（4速は +x、5速は −x）
