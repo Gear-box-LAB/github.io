@@ -97,48 +97,75 @@ function dogShift(d) {
 }
 
 // ---------- 10. シームレス（IST） ----------
-// 4速 → 5速: 5速のリングを入れる → 4速と5速が同時にかみ合う → 4速のリングが斜面で押し出される
-const IST_STEPS = [[1.5, '5速のクラッチ・リングを押し込む（4速はかみ合ったまま）'], [1.0, '4速と5速が同時にかみ合う: 中でトルクがぶつかり、エンジンの回転が5速の回転まで下がる'], [1.8, '4速の爪に逆向きのトルクがかかり、斜面でリングが押し出される'], [0.8, '5速だけで加速（駆動力はとぎれていない）']];
-const IS = { g: 4, shift: null, zoom: true, free: 0, rel0: null };
-function istShift() {
-  if (IS.shift) return;
-  if (IS.g === 5) { IS.g = 4; return; }   // 見終わったら、4速にもどして、もう一度見られるようにする
-  IS.shift = newShift(IST_STEPS, 4, 5);
-  IS.rel0 = null;
+// 4速 → 5速を、「次へ」で1つずつ動かす。インプット軸の速さは一定にして、歯車と軸の回り方の差を見せる
+// 角度の差 d = 軸（リング）の角度 − 歯車の角度。d = 0 で、まっすぐの面どうしが触れる（リングの爪は 2α ずらして作ってある）
+// d が増えて爪のすき間を渡りきると、斜面に当たる: dCoast(e) = 間隔 − 4α + 斜面 × (2 − e/h)（e: 爪の重なりの深さ）
+const dCoast = e => PIST.pitch - 4 * PIST.alpha + PIST.slopeA * (2 - e / PIST.h);
+const IST_TEXT = [
+  '4速で走っています。4速のリングの爪が、4速の歯車の爪のまっすぐの面に押されて、軸を回しています。5速の歯車は、軸より速く空回りしています。',
+  '5速のリングを近づけ、爪のすき間がそろった所で押し込みます。軸より速く回る5速の歯車の爪が、リングの爪に後ろから追いつきます。',
+  '5速の爪がリングの爪に当たり、5速がかみ合いました。ここから5速の歯車が軸を引っぱります。',
+  '軸とリングが、5速の速さまで速くなります。4速の歯車はそのままの速さなので、4速のリングの爪が、4速の歯車の爪に対して前へずれていきます。',
+  '4速のリングの爪が、すき間を渡りきって、4速の歯車の爪の斜面に当たりました。',
+  '斜面に乗り上げて、4速のリングが軸の向きに押し出されます。だれも引き抜かなくても、機構だけで外れます。',
+  '4速が外れました。4速のリングの爪は、もう4速の歯車の爪と重なっていません。',
+  'シフトドラムが、4速のリングを中立にもどします。',
+  '5速だけで走っています。4速の歯車は、また空回りしています。「次へ」で、はじめ（4速）にもどります。'
+];
+// stage: 0 4速、1 5速を入れる（動く）、2 当たった（止まる）、3 軸が速くなる（動く）、4 斜面に当たった（止まる）、5 押し出される（動く）、6 外れた（止まる）、7 中立へ（動く）、8 5速で走る
+// 奇数の段階は動き、終わると止まって「次へ」を待つ
+const IS = { stage: 0, run: true, ang: 0, shaft: 0, off5: 0, e5: 0, gap: 1, e4: PIST.h, back: 0 };   // off5: 5速がかみ合ったときの、軸と5速の歯車の角度の差
+const istMoving = () => IS.run && IS.stage % 2 === 1;   // 動いている段階
+function istNext() {
+  if (istMoving()) return;   // 動いている間は待つ
+  if (IS.stage === 8) { Object.assign(IS, { stage: 0, run: true, e5: 0, gap: 1, e4: PIST.h, back: 0 }); IS.shaft = IS.ang / GEARS[3][1]; return; }
+  IS.stage += 1;
+  IS.run = true;
 }
-// 拡大の 3D の動き: 段階 k と、その中の進み p（0〜1）から、爪の重なりと角度の差を決める
-// 軸の回転は止めて、歯車とリングの「回る角度の差」だけを見せる（一番上の爪の形が見えるように）
-function istPose(dt, relNow) {   // relNow: 全体の図で、今の5速の歯車とリングの角度の差（そろえ始める所に使う）
-  const s = IS.shift, k = s ? s.k : IS.g === 4 ? -1 : 4, p = s ? Math.min(1, s.t / s.steps[s.k][0]) : 1;
-  const h = IZ.h, mid = (IZ_DRIVE + izCoast(h)) / 2, pitch = Math.PI * 2 / IZ.n;
-  // 5速の歯車は、つながるまでは軸より速く空回りする（4速の比 ÷ 5速の比 倍）
-  if (k < 0 || (k === 0 && p < 0.5)) IS.free = (IS.free + 1.2 * (GEARS[3][1] / GEARS[4][1] - 1) * dt) % pitch;
-  const o = { ang: 0, e4: h, rel4: IZ_DRIVE, e5: 0, gap5: 0.012, rel5: -IS.free, t4: 1, t5: 0 };
-  if (k === 0) {   // 前半: 爪が重ならない所まで近づき、5速の爪をすき間の真ん中に少しずつそろえる。後半: 重なっていく
-    if (IS.rel0 === null) IS.rel0 = mid + ((((relNow !== undefined ? relNow : -IS.free) - mid) % pitch + 1.5 * pitch) % pitch - pitch / 2);   // 一番近いすき間
-    if (p < 0.5) { o.gap5 = 0.012 * (1 - p * 2); o.rel5 = IS.rel0 + (mid - IS.rel0) * p * 2; }
-    else { o.gap5 = 0; o.e5 = h * (p - 0.5) * 2; o.rel5 = mid + (IZ_DRIVE - mid) * (p - 0.5) * 2; }
+// 毎フレーム: インプット軸を回し、段階に合わせて、軸の角度、リングの位置を進める
+function istStep(dt) {
+  if (!IS.run) return;
+  const r4 = GEARS[3][1], r5 = GEARS[4][1], g4 = () => IS.ang / r4, g5 = () => IS.ang / r5;
+  IS.ang += W_IN * dt;
+  const st = IS.stage;
+  if (st <= 2) IS.shaft = g4();          // 4速の歯車が軸を回す
+  else IS.shaft = g5() + IS.off5;         // 5速の歯車が軸を回す（軸が速くなる）
+  if (st === 1) {
+    const d5 = ((IS.shaft - g5()) % PIST.pitch + PIST.pitch) % PIST.pitch;   // 5速の、角度の差（0〜間隔）。歯車が追いつくほど小さくなる
+    if (IS.gap > 0) IS.gap = Math.max(0, IS.gap - dt / 0.6);               // まず、爪が重ならない所まで近づく
+    else if (IS.e5 === 0 && !(d5 > 0.25 && d5 < dCoast(PIST.h) - 0.02)) { /* 5速の爪が、リングの爪のすき間に来るのを待つ */ }
+    else if (IS.e5 < PIST.h) IS.e5 = Math.min(PIST.h, IS.e5 + PIST.h * dt / 0.3);   // すき間に押し込む
+    else if (d5 < 0.03 || d5 > PIST.pitch - 0.03) { IS.stage = 2; IS.run = false; IS.off5 = Math.round((IS.shaft - g5()) / PIST.pitch) * PIST.pitch; }   // 追いついて当たった
   }
-  if (k === 1) { o.e5 = h; o.rel5 = IZ_DRIVE; o.t5 = 1; o.t4 = -1; o.pullB = true; o.rel4 = IZ_DRIVE + (izCoast(h) - IZ_DRIVE) * Math.min(1, p * 2); }
-  if (k === 2) { o.e5 = h; o.rel5 = IZ_DRIVE; o.t5 = 1; o.t4 = -1; o.pushA = true; o.e4 = h * (1 - p); o.rel4 = izCoast(o.e4); }
-  if (k >= 3) { o.e5 = h; o.rel5 = IZ_DRIVE; o.t5 = 1; o.t4 = 0; o.e4 = 0; o.rel4 = izCoast(0); o.back4 = k === 3 ? p : 1; }   // back4: 4速のリングを中立へもどす進み（全体の図）
-  return o;
+  if (st === 3 && IS.shaft - g4() >= dCoast(PIST.h)) { IS.stage = 4; IS.run = false; }   // 4速の爪が斜面に当たった
+  if (st === 5) {
+    IS.e4 = Math.max(0, PIST.h * (2 - (IS.shaft - g4() - (PIST.pitch - 4 * PIST.alpha)) / PIST.slopeA));   // 斜面に沿って押し出される
+    if (IS.e4 === 0) IS.stage = 6;
+  }
+  if (st === 7) { IS.back = Math.min(1, IS.back + dt / 0.6); if (IS.back === 1) IS.stage = 8; }
+  if ([2, 4, 6].includes(IS.stage)) IS.run = false;   // 止めて、次のクリックを待つ
 }
-
-// 変速機全体の図: 4速・5速のリングの位置と、歯車の角度を、拡大の図の動き o に合わせる
-// リングの中心 = 歯車の面 + 向き × (2h − e + すき間 + リングの幅の半分)。中立は、ハブの真ん中
-function istWhole(it, o) {
-  const H = PIST.h / IZ.h, free = 0.0325 - 2 * PIST.h;   // 拡大の図との大きさの比、中立のときのすき間
-  const ringX = (k, e, gap) => PAR.xs[k] + (k % 2 ? -1 : 1) * PIST.face + (k % 2 ? -1 : 1) * (2 * PIST.h - e * H + gap + PIST.ringHalf);
-  const ang = it.outShaft.rotation.x;
-  // 4速（3番目のリング）: かみ合っている間は角度の差で回し、外れたら中立へもどして空回り
-  if (o.back4 === undefined) { it.sleeves[1].position.x = ringX(3, o.e4, 0); it.driven[3].free.rotation.x = ang - (o.rel4 - IZ_DRIVE); }
-  else it.sleeves[1].position.x = ringX(3, 0, 0) + (PAR.sleeves[1] - ringX(3, 0, 0)) * o.back4;
-  // 5速（5番目のリング）: 近づくまでは空回り、そろえてからはかみ合う
-  it.sleeves[2].position.x = o.gap5 >= 0.012 && o.e5 === 0 ? PAR.sleeves[2] : ringX(4, o.e5, o.gap5 / 0.012 * free);
-  if (o.e5 > 0 || o.gap5 < 0.012) it.driven[4].free.rotation.x = ang - (o.rel5 - IZ_DRIVE);
-  it.sleevePos[1] = it.sleeves[1].position.x - PAR.sleeves[1];
-  it.sleevePos[2] = it.sleeves[2].position.x - PAR.sleeves[2];
+// 3D に反映する。リングの中心 = 歯車の面 + 向き × (2h − e + すき間 + リングの幅の半分)。中立は、ハブの真ん中
+function istUpdate(it) {
+  const r4 = GEARS[3][1], st = IS.stage;
+  it.inShaft.rotation.x = IS.ang;
+  it.cnt.rotation.x = -IS.ang * PAR.inR / PAR.cntR;
+  it.driven.forEach(p => { p.free.rotation.x = IS.ang / p.ratio; });
+  it.outShaft.rotation.x = IS.shaft;
+  it.sleeves.forEach(s => { s.rotation.x = IS.shaft; });
+  const ringAt = (k, e, gap) => PAR.xs[k] + (k % 2 ? -1 : 1) * (PIST.face + 2 * PIST.h - e + gap + PIST.ringHalf);
+  const free = 0.0325 - 2 * PIST.h;   // 中立のときの、爪と爪のすき間
+  it.sleeves[0].position.x = PAR.sleeves[0];
+  const a4 = ringAt(3, IS.e4, 0);
+  it.sleeves[1].position.x = a4 + (PAR.sleeves[1] - a4) * IS.back;
+  it.sleeves[2].position.x = st === 0 ? PAR.sleeves[2] : ringAt(4, IS.e5, IS.gap * free);
+  // 光: 力を伝えている組は橙、逆向きのトルクを受けている4速は青
+  glow(it.parts.constant.concat(it.parts.clutch), GLOW.power);
+  it.driven.forEach(p => glow([p.free], 0));
+  glow(it.sleeves, 0);
+  if (st <= 2) glow([it.driven[3].free, it.sleeves[1]], GLOW.power);
+  if (st >= 2) glow([it.driven[4].free, it.sleeves[2]], GLOW.power);
+  if (st >= 3 && st <= 5) glow([it.driven[3].free, it.sleeves[1]], GLOW.pre);
 }
 
 // ---------- 数式の考え方 ----------
@@ -485,36 +512,25 @@ const LESSONS_TRANS = [
   },
   {
     name: 'シームレス（IST）', title: 'シームレス（イケヤフォーミュラの IST）: 2つの段を一瞬同時にかみ合わせ、斜面で古い段を外す',
-    scene: 'custom', live: true, cam: () => (IS.zoom ? [[0.0, 0.34, 0.04], [0, 0, 0]] : [[0.08, 0.32, 1.15], [-0.02, 0.0, 0]]),
-    hint3d: '「爪を拡大」では、4速と5速のドグの爪の輪を切り開いて、平らに広げ、上から見ています。黄色が歯車の爪（前がまっすぐ、後ろが斜め）、水色がクラッチ・リングの爪です。リングを止めて、歯車との回る角度の差だけを、とてもゆっくり見せています。',
-    actions: [['シフトアップ（4速 → 5速）', istShift], ['爪を拡大', () => { IS.zoom = !IS.zoom; redo3d(); }, () => IS.zoom]],
-    tick: dt => {
-      const s = IS.shift;
-      IS.shift = tickShift(IS.shift, dt);
-      if (s && !IS.shift) IS.g = 5;
-    },
-    reset: () => { IS.g = 4; IS.shift = null; IS.zoom = true; },
-    build3d: world => (IS.zoom && !TR_CAR ? buildIstZoom(world) : buildParallel(world, { ist: true })),
-    update3d: (it, dt) => {
-      if (it.zoom) { updateIstZoom(it, istPose(dt)); return; }
-      const s = IS.shift, both = s && (s.k === 1 || s.k === 2), g = !s ? IS.g : s.k === 0 ? 4 : 5;
-      if (it.istG && it.istG !== g) it.angleIn = it.angleOut * GEARS[g - 1][1];   // 段が変わっても、アウトプット軸の角度がとばないようにする
-      it.istG = g;
-      updateParallel(it, dt, W_IN, g, sleeveFor(g), true);
-      istWhole(it, istPose(dt, it.outShaft.rotation.x - it.driven[4].free.rotation.x + IZ_DRIVE));   // 爪の位置と角度は、拡大の図と同じ動きにする
-      if (both) glow([it.driven[3].free, it.sleeves[1]], GLOW.pre);   // 4速も、まだかみ合っている（逆向きのトルク）
-    },
+    scene: 'custom', live: true, cam: [[0.24, 0.27, 0.19], [0.24, 0.05, 0]],
+    hint3d: '黄色が歯車の爪（前がまっすぐ、後ろが斜め）、水色がクラッチ・リングの爪です。爪が見えるように、歯車とリングを透かしています。「次へ」を押すと、1つずつ進みます。インプット軸の速さは一定にして、とてもゆっくり見せています。',
+    actions: [['次へ', istNext], ['はじめから', () => { Object.assign(IS, { stage: 8 }); IS.run = false; istNext(); }]],
+    reset: () => { Object.assign(IS, { stage: 8, run: false }); istNext(); },
+    build3d: world => buildParallel(world, { ist: true }),
+    tick: istStep,   // 動きは毎フレーム進める（3D を見ていないときも）
+    update3d: istUpdate,
     text: [
       '<b>ほかの呼び方</b>: シームレストランスミッション、シームレスシフト、IST（Ikeya Seamless Transmission）。MotoGP のバイクなどにも、考え方の近いシームレスミッションがあります。',
       '<b>構造</b>: ふつうの MT と同じ平行軸で、発進クラッチも1枚だけです（DCT のように2枚ではありません）。ちがうのはドグの形です。歯車の爪は、回る向きの<b>前の面がまっすぐ</b>（駆動の面）、<b>後ろの面が斜め</b>（コーストの面）になっています。クラッチ・リングの爪は、その逆の形です。特許では、V字のカム溝を持つ「クラッチ・カム・リング」と、そこにはまる突起を持つ「クラッチ・リング」で、この斜面を作っています。',
       '<b>仕組み</b>（4速 → 5速）: ① 4速で加速したまま、シフトドラムで5速のリングを押し込みます。② 一瞬、4速と5速が同時にかみ合います。ふつうの MT ならこわれる状態です。③ 変速機の中でトルクがぶつかり、エンジンの回転が5速の回転まで下がります。このとき5速の爪は、まっすぐの面で押されてかみ合ったまま。4速の爪には逆向きのトルクがかかり、斜面で押されて、4速のリングが外へはじき出されます。④ 5速だけで加速します。この間、タイヤへの力はほとんどとぎれません。',
-      '<b>見る所</b>: 「シフトアップ（4速 → 5速）」を押すと、拡大した爪で ①〜④ が順に見られます。4速の爪が、まっすぐの面から斜面の側へ移り、斜面をすべってリングが外れる所が要点です。「爪を拡大」を消すと、変速機全体で見られます。もう一度押すと、4速にもどります。',
+      '<b>見る所</b>: 「次へ」を押すたびに、① 5速のリングを入れる → ② 5速がかみ合う → ③ 軸が5速の速さまで速くなり、4速のリングの爪がずれていく → ④ 4速の歯車の爪の斜面に当たる → ⑤ 斜面で押し出される → ⑥ 中立へ、と1つずつ進みます。5速がかみ合ったことが原因で、4速が機構だけで外れる、一続きの流れが要点です。',
+      '<b>見せ方</b>: ここでは、インプット軸（エンジン）の速さを一定にして、軸が速くなるように見せています。実際の車では、車速（アウトプット軸）はほとんど変わらず、エンジンの回転が下がります。どちらでも、歯車と軸の回り方の差は同じです。',
       '<b>長所と短所</b>: DCT と同じくらい駆動力がとぎれないのに、構造は MT とほぼ同じで、軽く、安くできます。シフトダウンは、減速中は力がとぎれても困らないので、ふつうの MT に近い順番（いったん中立にしてから下の段）です。',
       '<b>注意</b>: ここでの仕組みは、イケヤフォーミュラが 2010 年に出願した特許（WO2012066740）と、同社サイトの説明をもとにしています。今の製品の細かい部品は、ちがう場合があります。爪の数や形、大きさは説明用です。'
     ],
     symbols: `${sub('F', 't')}: 爪にかかる回る向きの力、${sub('F', 'a')}: リングを軸の向きに押す力、θ: 斜面の角度（ここでは 45°）、T: 爪が伝えるトルク、${sub('r', 'd')}: 爪の半径、${sub('i', '4')}、${sub('i', '5')}: 4速・5速の変速比、${sub('n', 'out')}: アウトプット軸の回転数。`,
     formula: () => {
-      const nOut = 100 / 3.6 / CAR.tire * CAR.final / RPM, ft = 50 / IZ.rm;
+      const nOut = 100 / 3.6 / CAR.tire * CAR.final / RPM, ft = 50 / PIST.rm;
       return [
         ['同時にかみ合うとき', `エンジン: ${sub('n', 'out')} × ${sub('i', '4')} → ${sub('n', 'out')} × ${sub('i', '5')}`, `時速 100 km で ${n0(nOut * GEARS[3][1])} rpm → ${n0(nOut * GEARS[4][1])} rpm に一気に下がる`, WHY.istLoop],
         ['斜面がリングを押し出す力', `${sub('F', 'a')} = ${sub('F', 't')} × tan θ、${sub('F', 't')} = T / ${sub('r', 'd')}`, `逆向きのトルク 50 N·m なら ${n0(ft)} N × tan 45° = ${n0(ft)} N で押し出す（摩擦は除く）`, WHY.istCam],
@@ -522,7 +538,7 @@ const LESSONS_TRANS = [
       ];
     },
     chart: () => shiftChart('IST'),
-    readout: () => (IS.shift ? `変速中: ${shiftStep(IS.shift)}` : IS.g === 4 ? '4速で加速中。「シフトアップ（4速 → 5速）」を押してください。' : '5速に変わりました。もう一度押すと、4速にもどります。')
+    readout: () => `${IS.stage + 1} / 9: ${IST_TEXT[IS.stage]}${istMoving() || IS.stage === 8 ? '' : '　→「次へ」'}`
   }
 ];
 const CV = { sweep: false, r: [0, 0] }, TR = { r: [0, 0] };
@@ -550,12 +566,11 @@ const ON_CAR = {
   '電気自動車の減速機': { layout: 'EV', coupler: '', couplerKey: '', mechScale: 0.7, mechRot: -Math.PI / 2, out: () => motorRpm(P.evKmh) / 1000 / EV_RATIO, final: 1,
     carText: '後輪駆動の電気自動車の例です。後ろの車軸の間に、モーター、減速機、デフをまとめた e-Axle を横向きに置き、短いドライブシャフトで後輪を回します。電池は床下に平らに並べ、インバーターが電池の直流をモーター用の交流に変えます。前にも置くと4輪駆動になります。' },
   'ドグミッション': { layout: 'FR', coupler: 'クラッチ', couplerKey: 'clutchDisc', mechScale: 0.5, mechRot: Math.PI, out: () => W_IN / GEARS[DG.g - 1][1],
-    carText: 'FR のレース車の例です。縦置きエンジンの後ろにクラッチとドグミッションが並び、プロペラシャフトで後輪へつながります。重さの配分のため、変速機を後ろの車軸のそばに置く（トランスアクスル）レース車も多くあります。' },
-  'シームレス（IST）': { layout: 'FR', coupler: 'クラッチ', couplerKey: 'clutchDisc', mechScale: 0.5, mechRot: Math.PI, out: () => W_IN / GEARS[(IS.shift ? 4 : IS.g) - 1][1],
-    carText: '構造は MT と同じなので、MT と同じ所に載せられます。FR 車なら、縦置きエンジンの後ろにクラッチと IST が一直線に並び、プロペラシャフトで後輪へつながります。2枚のクラッチを持つ DCT より短く軽いので、今ある MT 車の変速機と置きかえやすいのも特長です。車の中の変速機も、カムの斜面付きの爪（黄）とクラッチ・リングの爪（水色）にしてあり、「シフトアップ」で拡大の図と同じ動きをします（変速機のあたりをズームすると見えます）。' }
+    carText: 'FR のレース車の例です。縦置きエンジンの後ろにクラッチとドグミッションが並び、プロペラシャフトで後輪へつながります。重さの配分のため、変速機を後ろの車軸のそばに置く（トランスアクスル）レース車も多くあります。' }
 };
 LESSONS_TRANS.forEach(l => {
   const c = ON_CAR[l.name], build = l.build3d, update = l.update3d, cam = l.cam;
+  if (!c) return;   // 車に載せないもの（シームレスは、変速機の中の動きを見る）
   Object.assign(l, c);
   l.build3d = world => (TR_CAR ? buildOnCar(world, l, build) : build(world));
   l.update3d = (it, dt) => { update(it, dt); if (it.onCar) updateOnCar(it, dt, c.out(), c.final || CAR.final); };
