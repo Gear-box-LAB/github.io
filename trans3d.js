@@ -98,7 +98,7 @@ function buildParallel(world, opt) {
     const gm = gear(free, ro, 0.03, ALU, 0, 0, 0, 'x', 'drivenGear');
     if (opt.ist) Object.assign(gm.material, { transparent: true, opacity: 0.3, depthWrite: false });   // IST: 歯車を透かして、奥の爪のかみ合いを見せる
     const side = k % 2 ? -1 : 1;   // スリーブの側
-    if (opt.ist) for (let j = 0; j < PIST.n; j++) ringTooth(free, j * PIST.pitch, side * PIST.face, side, true, 0xf0c060, 'camDog');   // IST: カムの斜面付きの爪
+    if (opt.ist) for (let j = 0; j < PIST.n; j++) ringTooth(free, j * PIST.pitch, side * PIST.face, side, PIST.gear, 0xf0c060, 'camDog');   // IST: 斜面付きの歯
     else if (opt.dog) for (let j = 0; j < 4; j++) {   // ドグ（大きな爪が4つ）
       const a = j / 4 * Math.PI * 2;
       tagPart(box(free, 0.012, 0.012, 0.012, DARK, side * 0.021, 0.022 * Math.cos(a), 0.022 * Math.sin(a)), 'dogTeeth');
@@ -119,7 +119,7 @@ function buildParallel(world, opt) {
       r.position.set(x, y0, 0);
       world.add(r);
       ringX(r, 0.03, 0.042, 2 * PIST.ringHalf, 0x55656e, 0, 0, 'clutchRing', { transparent: true, opacity: 0.45, depthWrite: false });
-      for (let j = 0; j < PIST.n; j++) [-1, 1].forEach(side => ringTooth(r, j * PIST.pitch + 2 * PIST.alpha, side * PIST.ringHalf, side, false, 0x7fc8f8, 'clutchRing'));
+      for (let j = 0; j < PIST.n; j++) [-1, 1].forEach(side => ringTooth(r, j * PIST.pitch, side * PIST.ringHalf, side, PIST.sleeve, 0x7fc8f8, 'clutchRing'));
       return r;
     }
     const s = ringX(world, 0.03, 0.042, 0.025, opt.dog ? 0x55656e : DARK, x, y0, opt.dog ? 'dogRing' : 'sleeve');
@@ -509,19 +509,21 @@ function updateOnCar(it, dt, wOut, final) {
   s.wheels.forEach(w => { w.rotation.z = -s.angle / final; });
 }
 
-// ---------- シームレス（IST）の爪 ----------
-// 歯車の爪: 回る向きの前の面はまっすぐ（駆動の面）、後ろの面は斜め（コーストの面）。クラッチ・リングの爪は、その逆の形
-// 駆動トルクではまっすぐの面どうしが押し合ってかみ合い、逆向きのトルクでは斜面どうしが押し合って、リングが外へ押し出される
-const PIST = { n: 4, r1: 0.03, r2: 0.042, h: 0.008, w: 0.019, s: 0.012, face: 0.015, ringHalf: 0.0125 };   // 爪の数、内と外の半径、高さ、幅、斜面のずれ、歯車の面の位置（幅の半分）、リングの幅の半分
+// ---------- シームレス（IST）の爪（イケヤフォーミュラのサイトの図の形） ----------
+// 歯車の歯: 回る向きの前の面は、ほぼ立った面（駆動の面）。後ろの面は、根元の短い段のあと、長い斜面（コーストの面）
+// スリーブの歯: 四角い歯。歯と歯の間は、歯の幅より広い
+// 駆動トルクでは、立った面どうしが押し合ってかみ合う。逆向きのトルクでは、スリーブの歯の角が歯車の歯の斜面に乗り上げ、スリーブが外へ押し出される
+const PIST = { n: 5, r1: 0.03, r2: 0.042, h: 0.008, face: 0.015, ringHalf: 0.0125 };   // 歯の数、内と外の半径、高さ、歯車の面の位置（幅の半分）、リングの幅の半分
 PIST.rm = (PIST.r1 + PIST.r2) / 2;
-PIST.alpha = PIST.w / 2 / PIST.rm;   // 爪の幅の半分の角度
-PIST.slopeA = PIST.s / PIST.rm;      // 斜面のずれの角度
-PIST.pitch = Math.PI * 2 / PIST.n;   // 爪の間隔の角度
-// theta: 輪の上の角度、x0: 爪の根元の位置、dir: 爪の伸びる向き、vertFront: まっすぐの面が前か
-function ringTooth(parent, theta, x0, dir, vertFront, color, key) {
-  const { w, h, s } = PIST, sh = new THREE.Shape();
-  if (vertFront) sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2, h).lineTo(-w / 2 + s, h).closePath();
-  else sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2 - s, h).lineTo(-w / 2, h).closePath();
+PIST.pitch = Math.PI * 2 / PIST.n;   // 歯の間隔の角度
+// 歯の形 [回る向き, 高さ]（高さ h を 1 とする）。回る向きは + が前
+PIST.gear = [[-1.32, 0], [-1.22, 0.35], [0.43, 1], [0.83, 1], [0.95, 0.85], [1.05, 0.4], [1.33, 0]];
+PIST.ws = 2.25;   // スリーブの歯の幅
+PIST.sleeve = [[0, 0], [PIST.ws, 0], [PIST.ws, 1], [0, 1]];
+PIST.eFull = 0.65;   // かみ合いの深さ（歯の先が、歯車の歯の段の高さ 0.35 まで入る）
+// theta: 輪の上の角度、x0: 歯の根元の位置、dir: 歯の伸びる向き、pts: 歯の形
+function ringTooth(parent, theta, x0, dir, pts, color, key) {
+  const h = PIST.h, sh = new THREE.Shape(pts.map(([u, y]) => new THREE.Vector2(u * h, y * h)));
   const geo = new THREE.ExtrudeGeometry(sh, { depth: PIST.r2 - PIST.r1, bevelEnabled: false });
   // 形の横 → 回る向き、形の縦 → 軸の向き、厚さ → 半径の向き。dir = −1 では厚さの向きも逆にして、面の表裏を保つ
   geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir, 0, 0), new THREE.Vector3(0, dir, 0)));
@@ -532,3 +534,21 @@ function ringTooth(parent, theta, x0, dir, vertFront, color, key) {
   pivot.add(m);
   parent.add(pivot);
 }
+// 折れ線の上で、高さ y のときの回る向きの位置（line: 高さの順に並んだ点）
+function uAt(line, y) {
+  for (let k = 1; k < line.length; k++) {
+    const [u0, y0] = line[k - 1], [u1, y1] = line[k];
+    if ((y - y0) * (y - y1) <= 0 && y0 !== y1) return u0 + (u1 - u0) * (y - y0) / (y1 - y0);
+  }
+  return line[line.length - 1][0];
+}
+// スリーブの歯の重なり e（h を 1 とする）のときの、角度の差 d = スリーブ − 歯車
+// 駆動: スリーブの歯の後ろの面が、歯車の歯の前の面に触れる。コースト: スリーブの歯の前の面が、次の歯車の歯の後ろの面に触れる
+const FRONT = PIST.gear.slice(3).reverse(), BACK = PIST.gear.slice(0, 3);   // 前の面と後ろの面（高さの順）
+const dDrive = e => uAt(FRONT, 1 - e) * PIST.h / PIST.rm;
+const dCoast = e => PIST.pitch + (uAt(BACK, 1 - e) - PIST.ws) * PIST.h / PIST.rm;
+// 角度の差 d で、スリーブの歯の角が斜面に乗っているときの重なり e（斜面を登りきると 0）
+const eOnRamp = d => {
+  const u = (d - PIST.pitch) * PIST.rm / PIST.h + PIST.ws, [u0, y0] = BACK[1], [u1, y1] = BACK[2];
+  return Math.min(PIST.eFull, Math.max(0, 1 - (y0 + (y1 - y0) * (u - u0) / (u1 - u0))));
+};
