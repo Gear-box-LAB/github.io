@@ -190,8 +190,7 @@ function buildDct(world) {
     const free = new THREE.Group();
     free.position.set(DCT.x[g], y1, 0);
     world.add(free);
-    const gm = gear(free, ro, 0.03, ALU, 0, 0, 0, 'x', 'drivenGear');
-    if (opt.ist) Object.assign(gm.material, { transparent: true, opacity: 0.3, depthWrite: false });   // IST: 歯車を透かして、奥の爪のかみ合いを見せる
+    gear(free, ro, 0.03, ALU, 0, 0, 0, 'x', 'drivenGear');
     const side = (g === 2 || g === 1) ? 1 : -1;
     ringX(free, 0.013, 0.029, 0.012, DARK, side * 0.021, 0, 'dogTeeth');
     nameTag(world, `${g}速`, DCT.x[g], y1 - ro - 0.03, 0, '#dfe6e9', 0.025);
