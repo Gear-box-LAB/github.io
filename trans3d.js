@@ -98,7 +98,7 @@ function buildParallel(world, opt) {
     const gm = gear(free, ro, 0.03, ALU, 0, 0, 0, 'x', 'drivenGear');
     if (opt.ist) Object.assign(gm.material, { transparent: true, opacity: 0.3, depthWrite: false });   // IST: 歯車を透かして、奥の爪のかみ合いを見せる
     const side = k % 2 ? -1 : 1;   // スリーブの側
-    if (opt.ist) for (let j = 0; j < PIST.n; j++) istTooth(free, j * PIST.pitch, side * PIST.face, side, true, 0xf0c060, 'istDog');   // IST: 噛合い面の根元が細いドグ歯
+    if (opt.ist) for (let j = 0; j < PIST.n; j++) ringTooth(free, j * PIST.pitch, side * PIST.face, side, true, 0xf0c060, 'camDog');   // IST: カムの斜面付きの爪
     else if (opt.dog) for (let j = 0; j < 4; j++) {   // ドグ（大きな爪が4つ）
       const a = j / 4 * Math.PI * 2;
       tagPart(box(free, 0.012, 0.012, 0.012, DARK, side * 0.021, 0.022 * Math.cos(a), 0.022 * Math.sin(a)), 'dogTeeth');
@@ -113,8 +113,15 @@ function buildParallel(world, opt) {
   });
   // ハブ（軸に固定）とスリーブ（左右に滑る）
   const sleeves = PAR.sleeves.map(x => {
-    if (opt.ist) { istCamRing(outShaft, x); return istRing(world, x, y0); }   // IST: ハブの代わりにクラッチ・カム・リング、スリーブの代わりにクラッチ・リング
     ringX(outShaft, 0.012, 0.03, 0.02, STEEL, x, 0, 'hub');
+    if (opt.ist) {   // IST: 両側に、歯車と逆の形の爪を持つクラッチ・リング。爪は、角度の差 2α でまっすぐの面どうしが触れる位置に置く
+      const r = new THREE.Group();
+      r.position.set(x, y0, 0);
+      world.add(r);
+      ringX(r, 0.03, 0.042, 2 * PIST.ringHalf, 0x55656e, 0, 0, 'clutchRing', { transparent: true, opacity: 0.45, depthWrite: false });
+      for (let j = 0; j < PIST.n; j++) [-1, 1].forEach(side => ringTooth(r, j * PIST.pitch + 2 * PIST.alpha, side * PIST.ringHalf, side, false, 0x7fc8f8, 'clutchRing'));
+      return r;
+    }
     const s = ringX(world, 0.03, 0.042, 0.025, opt.dog ? 0x55656e : DARK, x, y0, opt.dog ? 'dogRing' : 'sleeve');
     if (opt.dog) for (let j = 0; j < 4; j++) [-1, 1].forEach(side => {   // ドグリングの両側の爪
       const a = j / 4 * Math.PI * 2 + Math.PI / 4;
@@ -502,34 +509,19 @@ function updateOnCar(it, dt, wOut, final) {
   s.wheels.forEach(w => { w.rotation.z = -s.angle / final; });
 }
 
-// ---------- シームレス（IST）の機構（イケヤフォーミュラの特許 WO2012066740 の実施例1をもとにする） ----------
-// クラッチ・カム・リング: 軸に固定。外周に、真ん中が「V形状部」、両側が「平坦部」のカム溝がある
-// クラッチ・リング: カム・リングの上を軸の向きに滑る。内周のカム突起が溝に入っていて、V形状部では、滑ると少し回る
-// ドグ歯: リングの歯と歯車の歯は、噛合い面の根元が少し細い（抜けにくい）。歯と歯の間は、歯の幅より広い
-// 駆動斜面 F: リングの歯の、駆動トルクを受ける面の根元にある斜面。駆動トルクでリングを「コースト噛合い位置」から「離脱待機位置」へ押しもどす
-// 離脱待機位置では、カム突起が V形状部の入口にある。逆向き（コースト）のトルクがかかると、突起が V形状部の斜面に押され、リングは中立へ滑る
-const PIST = { n: 4, r1: 0.03, r2: 0.042, h: 0.008, w: 0.012, d: 0.0004, f: 0.002, face: 0.015, ringHalf: 0.0125, rg: 0.03, c: 0.012, camW: 0.06 };
-// n 歯の数、r1・r2 歯の内と外の半径、h 歯の高さ、w 歯の幅、d 噛合い面の傾き（根元が片側 d 細い）、f 駆動斜面 F の高さ（45°）、
-// face 歯車の面（歯車の幅の半分）、ringHalf リングの幅の半分、rg カム溝の半径、c V形状部の回る向きのずれ、camW カム・リングの幅
-PIST.rt = (PIST.r1 + PIST.r2) / 2;      // 歯の真ん中の半径
-PIST.pitch = Math.PI * 2 / PIST.n;     // 歯の間隔の角度
-PIST.g0 = 0.045 - PIST.ringHalf - 2 * PIST.h;   // 中立のとき、歯の先と先のすき間（歯車の面とハブの真ん中の間は 0.045）
-PIST.aCe = PIST.g0 + PIST.h;           // コースト噛合い位置（中立からの移動）
-PIST.aSb = PIST.aCe - PIST.f;          // 離脱待機位置（F の高さだけ浅い）
-// カム溝の形: 中立からの移動 a で、突起が回る向きにどれだけずれるか（角度）。V形状部（|a| < aSb）では、中立に近いほど、コーストの向きへずれる
-const camPsi = a => (Math.abs(a) < PIST.aSb ? -PIST.c * (1 - Math.abs(a) / PIST.aSb) : 0) / PIST.rg;
-const camA = psi => PIST.aSb * (1 + psi * PIST.rg / PIST.c);   // V形状部で、ずれ psi になる移動 a
-// 歯の重なり e のとき、リングの歯と歯車の歯の角度の差（リング − 歯車）
-// 駆動の面どうしが触れる: 根元の細さの分と、F に乗っている分を足す。コーストの面どうしが触れる: 間隔 − 幅 − 根元の細さの分
-const dDrive = e => (PIST.w + 2 * PIST.d * (1 - e / PIST.h) + Math.max(0, PIST.f - (PIST.h - e))) / PIST.rt;
-const dCoastIst = e => (PIST.rt * PIST.pitch - PIST.w - 2 * PIST.d * (1 - e / PIST.h)) / PIST.rt;
-// 歯を1つ作る。gearSide: 歯車の歯か（false ならリングの歯で、後ろの面の根元に F が付く）、dir: 歯の伸びる向き
-function istTooth(parent, theta, x0, dir, gearSide, color, key) {
-  const { w, h, d, f } = PIST, sh = new THREE.Shape();
-  sh.moveTo(w / 2 - d, 0).lineTo(w / 2 + d, h).lineTo(-w / 2 - d, h);   // 前の面（根元が細い）→ 先 → 後ろの面の先
-  if (gearSide) sh.lineTo(-w / 2 + d, 0);
-  else sh.lineTo(-w / 2 + d - 2 * d * f / h, f).lineTo(-w / 2 + d - f, 0);   // 後ろの面の根元に、駆動斜面 F（45°）
-  sh.closePath();
+// ---------- シームレス（IST）の爪 ----------
+// 歯車の爪: 回る向きの前の面はまっすぐ（駆動の面）、後ろの面は斜め（コーストの面）。クラッチ・リングの爪は、その逆の形
+// 駆動トルクではまっすぐの面どうしが押し合ってかみ合い、逆向きのトルクでは斜面どうしが押し合って、リングが外へ押し出される
+const PIST = { n: 4, r1: 0.03, r2: 0.042, h: 0.008, w: 0.019, s: 0.012, face: 0.015, ringHalf: 0.0125 };   // 爪の数、内と外の半径、高さ、幅、斜面のずれ、歯車の面の位置（幅の半分）、リングの幅の半分
+PIST.rm = (PIST.r1 + PIST.r2) / 2;
+PIST.alpha = PIST.w / 2 / PIST.rm;   // 爪の幅の半分の角度
+PIST.slopeA = PIST.s / PIST.rm;      // 斜面のずれの角度
+PIST.pitch = Math.PI * 2 / PIST.n;   // 爪の間隔の角度
+// theta: 輪の上の角度、x0: 爪の根元の位置、dir: 爪の伸びる向き、vertFront: まっすぐの面が前か
+function ringTooth(parent, theta, x0, dir, vertFront, color, key) {
+  const { w, h, s } = PIST, sh = new THREE.Shape();
+  if (vertFront) sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2, h).lineTo(-w / 2 + s, h).closePath();
+  else sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2 - s, h).lineTo(-w / 2, h).closePath();
   const geo = new THREE.ExtrudeGeometry(sh, { depth: PIST.r2 - PIST.r1, bevelEnabled: false });
   // 形の横 → 回る向き、形の縦 → 軸の向き、厚さ → 半径の向き。dir = −1 では厚さの向きも逆にして、面の表裏を保つ
   geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir, 0, 0), new THREE.Vector3(0, dir, 0)));
@@ -539,32 +531,4 @@ function istTooth(parent, theta, x0, dir, gearSide, color, key) {
   pivot.rotation.x = theta;
   pivot.add(m);
   parent.add(pivot);
-}
-// クラッチ・カム・リング（軸に固定）と、外周のカム溝（V形状部 + 両側の平坦部）
-function istCamRing(outShaft, x) {
-  const cam = ringX(outShaft, 0.014, PIST.rg, PIST.camW, STEEL, x, 0, 'camRing');
-  for (let j = 0; j < PIST.n; j++) {
-    const pts = [];
-    for (let a = -PIST.camW / 2; a <= PIST.camW / 2 + 1e-9; a += PIST.camW / 60) {
-      const t = j * PIST.pitch + camPsi(a);
-      pts.push(new THREE.Vector3(x + a, PIST.rg * Math.cos(t), PIST.rg * Math.sin(t)));
-    }
-    outShaft.add(tagPart(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, 0.0025, 6), mat(0x1d1f22)), 'camGroove'));   // 溝の道すじ（暗い線）
-  }
-  return cam;
-}
-// クラッチ・リング: 透かした輪、両側のドグ歯、内周のカム突起（赤）
-function istRing(world, x, y0) {
-  const r = new THREE.Group();
-  r.position.set(x, y0, 0);
-  world.add(r);
-  ringX(r, PIST.rg, PIST.r2, 2 * PIST.ringHalf, 0x55656e, 0, 0, 'clutchRing', { transparent: true, opacity: 0.35, depthWrite: false });
-  for (let j = 0; j < PIST.n; j++) {
-    [-1, 1].forEach(side => istTooth(r, j * PIST.pitch, side * PIST.ringHalf, side, false, 0x7fc8f8, 'clutchRing'));
-    const p = new THREE.Group();
-    p.rotation.x = j * PIST.pitch;
-    tagPart(box(p, 0.006, 0.006, 0.005, 0xd40000, 0, PIST.rg - 0.001, 0), 'camProtrusion');
-    r.add(p);
-  }
-  return r;
 }
