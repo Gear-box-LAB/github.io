@@ -498,3 +498,80 @@ function updateOnCar(it, dt, wOut, final) {
   s.shafts.forEach(m => { m.rotation.y = s.angle / final; });
   s.wheels.forEach(w => { w.rotation.z = -s.angle / final; });
 }
+
+// ---------- シームレス（IST）: カムの斜面が付いたドグの拡大 ----------
+// 爪の輪を切り開いて、平らに広げた図にする（上から見ると、爪の形がそのまま見える）。横（z）が回る向き、x が軸の向き
+// 左: 4速の歯車の爪（黄）と、4速のクラッチ・リングの爪（水色）。右: 5速の組（左右を逆にした形）
+// 歯車の爪の形: 回る向きの前の面はまっすぐ（駆動の面）、後ろの面は斜め（コーストの面）。リングの爪は、その逆の形
+const IZ = { w: 0.022, h: 0.014, s: 0.014, rm: 0.041, n: 4, count: 5, x4: -0.09, x5: 0.09 };   // 爪の幅・高さ・斜面のずれ（45°）、爪の半径、輪の爪の数、並べる数、かみ合う所の位置
+IZ.pitch = Math.PI * 2 * IZ.rm / IZ.n;   // 爪の間隔（輪の周りの長さ ÷ 爪の数）
+IZ.alpha = IZ.w / 2 / IZ.rm;
+IZ.slopeA = IZ.s / IZ.rm;
+// 爪を1つ作る。vertFront: まっすぐの面が前（歯車の爪）か後ろ（リングの爪）か、dir: 爪の伸びる向き（+1 で +x）
+function flatTooth(parent, z, dir, vertFront, color, key) {
+  const { w, h, s } = IZ, sh = new THREE.Shape();
+  if (vertFront) sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2, h).lineTo(-w / 2 + s, h).closePath();
+  else sh.moveTo(-w / 2, 0).lineTo(w / 2, 0).lineTo(w / 2 - s, h).lineTo(-w / 2, h).closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: false });
+  // 形の横 → 回る向き（z）、形の縦 → 軸の向き（x）、厚さ → 上（y）
+  // dir = −1 のときは厚さの向きも逆にして、面の表と裏が入れかわらないようにする（暗く見えないように）
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(dir, 0, 0), new THREE.Vector3(0, dir, 0)));
+  const m = tagPart(new THREE.Mesh(geo, mat(color)), key);
+  m.position.set(0, dir > 0 ? 0 : 0.012, z);
+  parent.add(m);
+}
+// 爪の列（土台の板 + 爪）。face: 爪の向き。gear: 歯車の側か
+function toothRow(world, face, gear) {
+  const g = new THREE.Group(), len = IZ.pitch * IZ.count;
+  world.add(g);
+  const body = tagPart(box(g, 0.03, 0.012, len, gear ? ALU : 0x55656e, -face * 0.015, 0.006, 0), gear ? 'drivenGear' : 'clutchRing');
+  for (let k = 0; k < IZ.count; k++) flatTooth(g, (k - (IZ.count - 1) / 2) * IZ.pitch, face, gear, gear ? 0xf0c060 : 0x7fc8f8, gear ? 'camDog' : 'clutchRing');
+  return { g, body };
+}
+function buildIstZoom(world) {
+  const make = (x, face, name) => {   // face: 歯車の爪の向き（4速は +x、5速は −x）
+    const gr = toothRow(world, face, true), ring = toothRow(world, -face, false);
+    gr.g.position.x = x;
+    nameTag(world, name, x - face * 0.025, 0.03, 0.105, '#dfe6e9', 0.011);
+    nameTag(world, 'リングの爪', x + face * 0.05, 0.03, 0.105, '#7fc8f8', 0.011);
+    return { gr, ring, x, face };
+  };
+  const g4 = make(IZ.x4, 1, '4速の歯車の爪'), g5 = make(IZ.x5, -1, '5速の歯車の爪');
+  nameTag(world, '爪の輪を切り開いて、平らに広げた図（回る向きは ↓）', 0, 0.03, -0.11, '#dfe6e9', 0.01);
+  const arrow = (color, key) => { const a = tagPart(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 0.05, color, 0.012, 0.01), key); world.add(a); return a; };
+  const tags = { t4: nameTag(world, '', IZ.x4 - 0.035, 0.03, -IZ.pitch * 1.4, '#7fc8f8', 0.011), t5: nameTag(world, '', IZ.x5 + 0.035, 0.03, -IZ.pitch * 1.4, '#f0a81c', 0.011),
+    a: nameTag(world, '', IZ.x4 + 0.035, 0.03, IZ.pitch * 1.4, '#7fc8f8', 0.011), b: nameTag(world, '', IZ.x5 - 0.035, 0.03, IZ.pitch * 1.4, '#f0a81c', 0.011) };
+  return { zoom: true, g4, g5, tags, arrows: { t4: arrow(0x7fc8f8, 'arrow:逆向きのトルク'), t5: arrow(0xf0a81c, 'arrow:駆動トルク'), a: arrow(0x7fc8f8, 'arrow:リングを押し出す力'), b: arrow(0xf0a81c, 'arrow:かみ込む力') },
+    parts: { cam: [g4.gr.g, g5.gr.g], rings: [g4.ring.g, g5.ring.g], g4: [g4.gr.g, g4.ring.g], g5: [g5.gr.g, g5.ring.g] } };
+}
+// 爪の重なりの深さ e（0〜h）と、歯車とリングの回る角度の差 rel から、リングの位置と歯車の角度を決める
+// rel = 2α: 駆動の面（まっすぐ）どうしが触れる。rel = 90° − 2α + 斜面 × (2 − e/h): コーストの面（斜面）どうしが触れる
+const IZ_DRIVE = 2 * IZ.alpha;
+const izCoast = e => Math.PI * 2 / IZ.n - 2 * IZ.alpha + IZ.slopeA * (2 - e / IZ.h);
+// gap: 爪が重ならない所まで離す距離。リングの土台は、歯車の爪の根元から 2h − e の所
+function placeRing(gg, e, gap) {
+  gg.ring.g.position.x = gg.x + gg.face * (2 * IZ.h - e + (gap || 0));
+}
+// o: { e4 / e5 重なり、rel4 / rel5 角度の差、gap5 5速のリングの離れ、t4 / t5 トルクの向き（+1 駆動、−1 逆向き、0 なし）、pushA / pullB 押し出す・かみ込む力を見せるか }
+function updateIstZoom(it, o) {
+  // 歯車の爪の列は、角度の差の分だけ、回る向きの後ろへずらす（リングを止めて見る）
+  it.g4.gr.g.position.z = -o.rel4 * IZ.rm;
+  it.g5.gr.g.position.z = -o.rel5 * IZ.rm;
+  placeRing(it.g4, o.e4, 0);
+  placeRing(it.g5, o.e5, o.gap5);
+  const A = it.arrows, z0 = -IZ.pitch * 1.15;
+  const torque = (a, x, sgn) => { a.visible = !!sgn; if (sgn) { a.position.set(x, 0.02, z0 - 0.03 * sgn); a.setDirection(new THREE.Vector3(0, 0, sgn)); a.setLength(0.05, 0.014, 0.01); } };
+  torque(A.t4, IZ.x4 - 0.02, o.t4);
+  torque(A.t5, IZ.x5 + 0.02, o.t5);
+  A.a.visible = !!o.pushA;
+  if (o.pushA) { A.a.position.set(it.g4.ring.g.position.x, 0.02, IZ.pitch * 1.15); A.a.setDirection(new THREE.Vector3(it.g4.face, 0, 0)); A.a.setLength(0.035, 0.012, 0.009); }   // 歯車から離れる向き
+  A.b.visible = !!o.pullB;
+  if (o.pullB) { A.b.position.set(it.g5.ring.g.position.x - it.g5.face * 0.035, 0.02, IZ.pitch * 1.15); A.b.setDirection(new THREE.Vector3(-it.g5.face, 0, 0)); A.b.setLength(0.035, 0.012, 0.009); }   // 歯車へ近づく向き
+  setLabel(it.tags.t4, o.t4 > 0 ? '駆動トルク' : o.t4 < 0 ? '逆向きのトルク' : '');
+  setLabel(it.tags.t5, o.t5 > 0 ? '駆動トルク' : '');
+  setLabel(it.tags.a, o.pushA ? '斜面で押し出される' : '');
+  setLabel(it.tags.b, o.pullB ? 'まっすぐの面でかみ込む' : '');
+  Object.values(it.tags).forEach(t => { t.visible = t.userData.text !== ''; });   // 中身のない札は隠す
+  glow([it.g4.gr.body, it.g4.ring.body], o.t4 > 0 ? GLOW.power : o.t4 < 0 ? GLOW.pre : 0);   // 爪の色は変えずに、土台だけ光らせる
+  glow([it.g5.gr.body, it.g5.ring.body], o.t5 > 0 ? GLOW.power : 0);
+}
